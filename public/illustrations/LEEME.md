@@ -1,31 +1,49 @@
 # Carpeta `public/illustrations` — recursos visuales de KLAPS
 
-## Lo que ya existe (derivado de la imagen que enviaste)
+Todos los archivos se recortaron (se eliminó el lienzo transparente de 3889 × 5500) y se
+convirtieron a **WebP**. Ninguna imagen se ha deformado: se escalan por alto con `width: auto`.
 
-| Archivo | Origen | Uso |
-| --- | --- | --- |
-| `klaps-hero-720.webp` | Recorte de la zona ilustrada de tu pieza (sin el texto ni el botón impresos) | Ilustración principal de la pantalla de Bienvenida (móvil) |
-| `klaps-hero-1200.webp` | Igual, en mayor resolución | Bienvenida en tablet y escritorio |
-| `klaps-bienvenida-720/1080/1440.webp` | Composición completa original, optimizada (de 13,5 MB a 57–134 KB) | Reserva: cartel completo, PWA, redes |
+## Recursos oficiales integrados
 
-> No se alteró la imagen original: solo se recortaron los márgenes transparentes y se
-> convirtió a WebP. El estilo, las proporciones y los colores se respetan.
+| Archivo | Origen | Uso en la app | Peso |
+| --- | --- | --- | --- |
+| `mascota.webp` | `mascota.png` | Saludo del Panel | 71 KB |
+| `mascota-feliz.webp` | `klaps_feliz.png` | Estados vacíos y de éxito | 40 KB |
+| `guante-izquierdo.webp` | `guante-izquierdo.png` | Tarjeta del guante izquierdo | 50 KB |
+| `guante-derecho.webp` | `guante-derecho.png` | Tarjeta del guante derecho | 42 KB |
+| `sos.webp` | `botones.png` (pieza inferior) | Tarjeta de emergencia del Panel | 45 KB |
+| `iconos/salud.webp` | `botones.png` | Categoría «Salud» de Frases rápidas | 11 KB |
+| `iconos/transporte.webp` | `botones.png` | Categoría «Transporte» | 12 KB |
+| `iconos/compras.webp` | `botones.png` | Categoría «Compras» | 9 KB |
+| `iconos/emergencia.webp` | `botones.png` | Categoría «Emergencias» | 9 KB |
+| `iconos/aviso.webp` | `botones.png` | Categoría «Avisos» (nevera, no semáforo) | 10 KB |
+| `klaps-hero-720/1200.webp` | recorte de la composición | Ilustración de Bienvenida | 43 / 89 KB |
+| `klaps-bienvenida-720/1080/1440.webp` | composición completa | Reserva (cartel, PWA, redes) | 57–134 KB |
 
-## Lo que falta y por qué importa
+Carpeta `iconos/`: piezas sueltas para las categorías de **Frases rápidas** (Etapa 4).
 
-La imagen recibida es una **composición aplanada**: la mascota, los guantes y los
-avatares no existen como archivos separados con transparencia. Por eso hoy no se
-pueden reutilizar en otras pantallas sin arrastrar fragmentos del fondo.
+## Notas de uso
 
-Cuando puedas, envía estos archivos con estos nombres exactos:
+- **No repetir** la misma ilustración en varias tarjetas sin motivo: la mascota aparece una vez
+  por pantalla; los guantes solo en sus tarjetas.
+- Las imágenes de los guantes son oscuras a propósito (producto real). Siempre sobre fondo claro.
+- `sos.webp` lleva el texto «¡Necesitas ayuda?» **impreso**: no debe usarse como icono pequeño
+  ni como única etiqueta. Va acompañado de un título real y de su botón.
 
-| Nombre | Contenido | Dónde se usa |
-| --- | --- | --- |
-| `mascota.png` | Robot de KLAPS, fondo transparente, 1024 × 1024 | Saludo del Panel y estados vacíos |
-| `guante-izquierdo.png` | Guante negro con muñequera KLAPS, transparente | Tarjeta del guante izquierdo |
-| `guante-derecho.png` | Guante derecho, transparente | Tarjeta del guante derecho |
-| `avatar-1.png` `avatar-2.png` `avatar-3.png` | Avatares en cuadrado | Historial y conversaciones |
+## Archivos originales
 
-`src/components/brand/Mascot.jsx` ya busca `mascota.png`: en cuanto el archivo
-exista, la mascota aparece sin tocar código. Mientras no exista, el componente no
-dibuja nada (nunca se sustituye por un emoji ni por una ilustración inventada).
+Los PNG originales de `mascota.png`, `guante-izquierdo.png` y `guante-derecho.png` siguen en esta
+carpeta (≈27 MB) como fuente para futuros recortes. La aplicación **no** los carga. Si quieres
+aligerar el repositorio, se pueden mover fuera de Git sin afectar a la app.
+
+## Lo que falta
+
+| Recurso | Para qué |
+| --- | --- |
+| `iconos/alimentacion.webp` | Categoría «Alimentación» |
+| `iconos/necesidades.webp` | Categoría «Necesidades personales» |
+| `iconos/conversacion.webp` | Categoría «Conversaciones cotidianas» |
+| `avatar-1.png` … `avatar-3.png` | Interlocutores del historial |
+| `logo-klaps-mark.svg` | Logotipo (ver `public/brand/LEEME.md`) |
+
+Mientras falten los iconos de categoría se usan iconos de Lucide, nunca emojis.

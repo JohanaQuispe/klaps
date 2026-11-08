@@ -4,20 +4,23 @@ import { cn } from '../../utils/cn'
 /**
  * Logotipo de KLAPS.
  *
- * IMPORTANTE · El símbolo oficial todavía no está disponible como archivo vectorial.
- * La aplicación carga `/brand/logo-klaps.svg` y, mientras ese archivo no exista,
- * muestra un monograma provisional claramente identificable.
+ * El símbolo oficial todavía no está disponible en un formato utilizable:
+ *   · `public/brand/logo-klaps.svg` (lo subiste) es un trazado MONOCROMO e invertido
+ *     (un cuadrado negro con la mano en negativo), así que no puede usarse como marca.
  *
- * Para usar tu logotipo definitivo:
- *   1. Guarda el archivo como  public/brand/logo-klaps.svg
- *   2. Recarga la app. No hay que tocar código.
+ * Mientras llega el archivo correcto (SVG con color o PNG 1024 × 1024 con transparencia),
+ * el componente muestra el monograma provisional y NO hace ninguna petición de red.
+ *
+ * Para activar el logotipo definitivo:
+ *   1. Guarda el archivo como  public/brand/logo-klaps-mark.svg
+ *   2. Descomenta MARK_SRC
  */
-const MARK_SRC = '/brand/logo-klaps.svg'
+const MARK_SRC = null // '/brand/logo-klaps-mark.svg'
 
 export function LogoMark({ className, size = 40, withLabel = false }) {
-  const [missing, setMissing] = useState(false)
+  const [missing, setMissing] = useState(!MARK_SRC)
 
-  if (!missing) {
+  if (MARK_SRC && !missing) {
     return (
       <img
         src={MARK_SRC}
