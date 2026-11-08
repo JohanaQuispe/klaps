@@ -1,13 +1,5 @@
 import { Link } from 'react-router-dom'
-import {
-  ArrowRight,
-  Bookmark,
-  History,
-  MessageSquareQuote,
-  Mic,
-  Siren,
-  Sparkles,
-} from 'lucide-react'
+import { ArrowRight, Bookmark, History, MessageSquareQuote, Mic, Siren, Sparkles } from 'lucide-react'
 import Card from '../../components/common/Card'
 import Button from '../../components/common/Button'
 import EmptyState from '../../components/common/EmptyState'
@@ -42,11 +34,11 @@ const QUICK_ACTIONS = [
     iconClasses: 'bg-butter text-brand-800',
   },
   {
-    to: '/emergencia',
-    label: 'Emergencia',
-    description: 'SOS con confirmación previa.',
-    icon: Siren,
-    iconClasses: 'bg-danger-soft text-danger',
+    to: '/historial',
+    label: 'Historial',
+    description: 'Retoma lo que ya dijiste.',
+    icon: History,
+    iconClasses: 'bg-mint text-brand-800',
   },
 ]
 
@@ -59,7 +51,7 @@ export default function Dashboard() {
       {/* Saludo */}
       <Card tone="lilac" padding="lg" className="relative overflow-hidden">
         <DecorativeRings className="-top-24 -right-20 size-72" opacity={0.7} />
-        <div className="relative flex items-start justify-between gap-4">
+        <div className="relative flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-sm font-semibold text-brand-600">{formatLongDate()}</p>
             <h1 className="mt-1.5 font-display text-[1.6rem] leading-tight font-extrabold text-brand-800 sm:text-3xl">
@@ -79,7 +71,7 @@ export default function Dashboard() {
               </Link>
             </div>
           </div>
-          <Mascot size={120} className="hidden shrink-0 sm:block" />
+          <Mascot className="h-24 shrink-0 sm:h-36" float />
         </div>
       </Card>
 
@@ -132,6 +124,31 @@ export default function Dashboard() {
         </ul>
       </section>
 
+      {/* Emergencia */}
+      <section aria-labelledby="emergencia-titulo">
+        <Card className="flex flex-col gap-4 sm:flex-row sm:items-center" padding="md">
+          <img
+            src="/illustrations/sos.webp"
+            alt=""
+            aria-hidden="true"
+            loading="lazy"
+            className="h-20 w-auto shrink-0 self-start object-contain sm:h-24"
+          />
+          <div className="min-w-0 flex-1">
+            <h2 id="emergencia-titulo" className="font-display text-lg font-extrabold text-brand-800">
+              Emergencia
+            </h2>
+            <p className="mt-1 max-w-prose text-sm text-ink-soft">
+              Un solo botón para pedir ayuda. KLAPS siempre pide confirmación antes de activarse y
+              muestra el estado real del envío.
+            </p>
+          </div>
+          <Button as={Link} to="/emergencia" variant="danger" icon={Siren} className="sm:shrink-0">
+            Abrir SOS
+          </Button>
+        </Card>
+      </section>
+
       {/* Historial reciente */}
       <section aria-labelledby="historial-titulo">
         <SectionTitle
@@ -146,7 +163,8 @@ export default function Dashboard() {
         />
         <div className="mt-3">
           <EmptyState
-            icon={History}
+            image="/illustrations/mascota-feliz.webp"
+            imageAlt="Mascota de KLAPS celebrando"
             title="Todavía no hay actividad"
             description="Cuando traduzcas un gesto o envíes un mensaje, lo encontrarás en este espacio para copiarlo o reproducirlo."
             action={

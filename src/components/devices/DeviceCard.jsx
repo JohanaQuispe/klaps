@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Clock, Hand, Power, RefreshCw, SlidersHorizontal } from 'lucide-react'
 import Button from '../common/Button'
@@ -6,6 +7,30 @@ import ProgressBar from '../common/ProgressBar'
 import { batteryState, signalState, GLOVE_STATUS } from '../../services/bluetooth/mockGuards.js'
 import { formatBattery, formatRelativeTime, formatRssi } from '../../utils/format.js'
 import { cn } from '../../utils/cn'
+
+/** Miniatura del guante oficial; si falta el archivo cae al icono, sin imagen rota. */
+function GloveThumb({ glove }) {
+  const [failed, setFailed] = useState(false)
+
+  return (
+    <span
+      className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-md bg-brand-50"
+      aria-hidden="true"
+    >
+      {failed ? (
+        <Hand className="size-6 text-brand-700" />
+      ) : (
+        <img
+          src={`/illustrations/guante-${glove.id}.webp`}
+          alt=""
+          loading="lazy"
+          onError={() => setFailed(true)}
+          className="h-12 w-auto object-contain"
+        />
+      )}
+    </span>
+  )
+}
 
 function SignalBars({ bars }) {
   return (
@@ -38,12 +63,7 @@ export default function DeviceCard({ glove, onReconnect, onDisconnect, onRequest
     <article className="k-card flex flex-col rounded-lg bg-white p-5 shadow-soft">
       <header className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span
-            className="flex size-12 shrink-0 items-center justify-center rounded-md bg-brand-100 text-brand-700"
-            aria-hidden="true"
-          >
-            <Hand className="size-6" />
-          </span>
+          <GloveThumb glove={glove} />
           <div className="min-w-0">
             <h3 className="font-display text-lg font-extrabold text-brand-800">{glove.label}</h3>
             <p className="text-sm text-ink-soft">{glove.role}</p>
