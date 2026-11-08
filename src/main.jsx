@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App.jsx'
 import AccessibilityProvider from './context/AccessibilityProvider.jsx'
 import DeviceProvider from './context/DeviceProvider.jsx'
+import HistoryProvider from './context/HistoryProvider.jsx'
 import './styles/index.css'
 
 createRoot(document.getElementById('root')).render(
@@ -11,7 +12,9 @@ createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <AccessibilityProvider>
         <DeviceProvider>
-          <App />
+          <HistoryProvider>
+            <App />
+          </HistoryProvider>
         </DeviceProvider>
       </AccessibilityProvider>
     </BrowserRouter>

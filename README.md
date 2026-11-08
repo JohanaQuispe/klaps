@@ -4,7 +4,7 @@ Aplicación de comunicación inclusiva para personas con dificultades de audici�
 movilidad. Combina guantes inteligentes, reconocimiento de gestos, voz, texto e inteligencia
 artificial para que la conversación fluya con cualquier interlocutor.
 
-> **Estado del proyecto · Etapa 3 completada.**
+> **Estado del proyecto · Etapa 4 completada.**
 > Los guantes están en desarrollo: la aplicación funciona con **datos simulados** y así lo indica
 > en todo momento. No hay conexión Bluetooth real todavía.
 
@@ -58,8 +58,11 @@ src/
 ├── context/            accessibilityContext, AccessibilityProvider, deviceContext,
 │                       DeviceProvider, accessibilityOptions
 ├── hooks/              useSpeechSynthesis
-├── pages/              Welcome, Dashboard, Devices, Settings, ComingSoon, NotFound
-├── services/bluetooth/ mockGuards.js (datos simulados, separados de la interfaz)
+├── data/               phrases.js (7 categorías y 35 frases)
+├── pages/              Welcome, Dashboard, Translation, Voice, Phrases, History,
+│                       Emergency, Devices, Settings, ComingSoon, NotFound
+├── services/           bluetooth/mockGuards.js · gesture/demoGestures.js ·
+│                       speech/recognition.js · emergency/sos.js
 ├── styles/index.css    tokens de marca + accesibilidad
 ├── utils/              cn, format
 ├── App.jsx             solo rutas
@@ -74,7 +77,12 @@ src/
 | `/inicio` | Panel: saludo, estado de los guantes, accesos, actividad reciente |
 | `/dispositivos` | Guantes izquierdo y derecho: estado, batería, RSSI, sincronización, modo demostración |
 | `/ajustes` | Tamaño de texto, contraste, movimiento, mano dominante, voz, información |
-| `/traducir`, `/voz`, `/frases`, `/historial`, `/emergencia`, `/dispositivos/diagnostico` | Pantalla «en construcción» honesta con lo que incluirá cada módulo (Etapa 4) |
+| `/traducir` | Traducción de gestos con secuencia simulada, voz, copiar y limpiar |
+| `/voz` | Comunicación por voz con Web Speech Recognition y errores comprensibles |
+| `/frases` | 7 categorías con iconos 3D, buscador, favoritas y vista en grande |
+| `/historial` | Filtros, escuchar, copiar, favorita y eliminar |
+| `/emergencia` | SOS en dos pasos, contacto, gesto y ubicación con estado honesto del envío |
+| `/dispositivos/diagnostico` | Pendiente: necesita el firmware BLE |
 
 ---
 
@@ -138,3 +146,5 @@ Instrucciones completas en `public/brand/LEEME.md` y `public/illustrations/LEEME
 ## Documentación del proceso
 
 - `docs/etapa-1-analisis.md` — auditoría del repositorio, de los recursos y decisiones de diseño.
+- `docs/etapa-2-3-entrega.md` — sistema visual y maquetación.
+- `docs/etapa-4-entrega.md` — funcionalidad, pruebas y límites honestos.

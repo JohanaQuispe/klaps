@@ -1,11 +1,17 @@
 import { NavLink } from 'react-router-dom'
-import { Accessibility } from 'lucide-react'
+import { Accessibility, History, Mic, Siren } from 'lucide-react'
 import Logo from '../brand/Logo'
 import StatusBadge from '../common/StatusBadge'
 import { NAV_ITEMS } from './navigation'
 import { cn } from '../../utils/cn'
 
 /** Navegación lateral (escritorio ≥ 1024 px). */
+const SECONDARY_ITEMS = [
+  { to: '/voz', label: 'Comunicación por voz', icon: Mic },
+  { to: '/historial', label: 'Historial', icon: History },
+  { to: '/emergencia', label: 'Emergencia SOS', icon: Siren },
+]
+
 export default function Sidebar({ onOpenAccessibility }) {
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 flex-col border-r border-brand-100 bg-white/90 px-5 py-6 backdrop-blur-md lg:flex">
@@ -39,6 +45,30 @@ export default function Sidebar({ onOpenAccessibility }) {
           ))}
         </ul>
       </nav>
+
+      <div className="mb-4">
+        <p className="px-3.5 text-[0.68rem] font-semibold tracking-[0.14em] text-ink-soft uppercase">
+          Más
+        </p>
+        <ul className="mt-1.5 space-y-1">
+          {SECONDARY_ITEMS.map(({ to, label, icon: Icon }) => (
+            <li key={to}>
+              <NavLink
+                to={to}
+                className={({ isActive }) =>
+                  cn(
+                    'flex min-h-10 items-center gap-3 rounded-md px-3.5 text-sm font-semibold transition-colors',
+                    isActive ? 'bg-brand-50 text-brand-800' : 'text-ink-soft hover:text-brand-700',
+                  )
+                }
+              >
+                <Icon className="size-4 shrink-0" aria-hidden="true" />
+                <span>{label}</span>
+              </NavLink>
+            </li>
+          ))}
+        </ul>
+      </div>
 
       <div className="space-y-3">
         <button
