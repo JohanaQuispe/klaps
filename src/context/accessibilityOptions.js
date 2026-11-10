@@ -28,6 +28,13 @@ export const HAND_OPTIONS = [
   { value: 'izquierda', label: 'Izquierda' },
 ]
 
+export const EMERGENCY_GESTURES = [
+  { value: 'punio-doble', label: 'Puño cerrado dos veces' },
+  { value: 'palma-abierta', label: 'Palma abierta tres segundos' },
+  { value: 'manos-cruzadas', label: 'Manos cruzadas' },
+  { value: 'sin-gesto', label: 'Sin gesto configurado' },
+]
+
 export const DEFAULT_PREFERENCES = {
   fontSize: 'normal',
   contrast: 'normal',
@@ -36,4 +43,7 @@ export const DEFAULT_PREFERENCES = {
   speechRate: 1,
   speechPitch: 1,
   speechVoice: '',
+  emergencyContact: { name: '', phone: '' },
+  emergencyGesture: 'punio-doble',
+  shareLocation: false,
 }
