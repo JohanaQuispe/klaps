@@ -7,6 +7,10 @@
  * El navegador entrega las notificaciones BLE como DataView; aquí se convierten
  * en un objeto legible y, después, en el vector de 22 dimensiones que usa el
  * clasificador KNN.
+ *
+ * `applyCalibration` reescala los flex con los extremos reales medidos en la
+ * calibración guiada y centra el MPU-6050 con su línea base. Las lecturas sin
+ * calibrar se conservan en `rawFlex` / `rawImu` para diagnóstico.
  */
 
 export const FRAME_LENGTH = 34
@@ -47,6 +51,57 @@ export function parseFrame(payload, at = Date.now()) {
   })
 
   return { flex, imu, at, bytes: view.byteLength }
+}
+
+/**
+ * Aplica la calibración guardada a una lectura de un guante.
+ *
+ * · Flex: `(valor − min) / (max − min) × 100`, recortado a 0-100. Si un dedo no
+ *   se pudo calibrar (`valid[index] === false`) se deja como venga.
+ * · IMU: se resta la línea base del paso «neutro», tanto en aceleración como en
+ *   giroscopio. El valor original queda en `rawImu` porque la regla del estado
+ *   «0» (palma hacia abajo) es física y trabaja sobre la aceleración absoluta.
+ *
+ * @param {{flex: number[], imu: object, at: number}|null} reading
+ * @param {object|null} calibration contenido de `klaps.calibration.v1`
+ * @param {'derecho'|'izquierdo'} side guante del que viene la lectura
+ */
+export function applyCalibration(reading, calibration, side = 'derecho') {
+  if (!reading?.flex || !reading?.imu) return reading
+  if (!calibration?.flex?.min || !calibration?.flex?.max) return reading
+
+  const base = side === 'izquierdo' ? 5 : 0
+  const flex = reading.flex.map((value, index) => {
+    const position = base + index
+    const low = calibration.flex.min[position]
+    const high = calibration.flex.max[position]
+    const usable = calibration.flex.valid?.[position] ?? false
+    const span = high - low
+
+    if (!usable || !(span > 0)) return value
+    return clamp(((value - low) / span) * 100, 0, 100)
+  })
+
+  const offset = calibration.imu?.[side]
+  const imu = offset
+    ? {
+        ax: reading.imu.ax - (offset.ax ?? 0),
+        ay: reading.imu.ay - (offset.ay ?? 0),
+        az: reading.imu.az - (offset.az ?? 0),
+        gx: reading.imu.gx - (offset.gx ?? 0),
+        gy: reading.imu.gy - (offset.gy ?? 0),
+        gz: reading.imu.gz - (offset.gz ?? 0),
+      }
+    : reading.imu
+
+  return {
+    ...reading,
+    flex,
+    imu,
+    rawFlex: reading.flex,
+    rawImu: reading.imu,
+    calibrated: Boolean(offset) || flex.some((value, index) => value !== reading.flex[index]),
+  }
 }
 
 /** Aceleración (±20 m/s²) → 0-100. */
@@ -112,6 +167,41 @@ export function describeFrameContent(frame, byteLength = 0) {
   }
 
   return ''
+}
+
+/**
+ * Regla física del estado «0» (reposo):
+ * los cuatro dedos principales cerrados (flex ≥ 75 %) y la palma hacia abajo
+ * (az ≤ −7,5 m/s²). Es la mitad de la activación dual; la otra mitad es que el
+ * KNN reconozca una seña llamada 0 / REPOSO / PAUSA.
+ */
+export const REST_FLEX_THRESHOLD = 75
+export const REST_ACCEL_THRESHOLD = -7.5
+export const REST_FINGERS = 4
+
+/** ¿Esta mano está cerrada y apuntando hacia abajo? */
+export function isRestHand(reading) {
+  if (!reading?.flex || !reading?.imu) return false
+
+  const fingers = reading.flex.slice(0, REST_FINGERS)
+  if (fingers.length < REST_FINGERS) return false
+
+  const closed = fingers.every((value) => Number.isFinite(value) && value >= REST_FLEX_THRESHOLD)
+  // La orientación se mide sobre la lectura sin calibrar: es una regla física.
+  const az = reading.rawImu?.az ?? reading.imu.az
+  const pointingDown = Number.isFinite(az) && az <= REST_ACCEL_THRESHOLD
+
+  return closed && pointingDown
+}
+
+/**
+ * ¿Las manos están en reposo? Se evalúan solo los guantes que envían datos y
+ * todos deben cumplir la regla: así se puede seguir firmando con una mano
+ * mientras la otra descansa... salvo que ambas estén cerradas.
+ */
+export function isRestPose({ derecho, izquierdo } = {}) {
+  const hands = [derecho, izquierdo].filter(Boolean)
+  return hands.length > 0 && hands.every(isRestHand)
 }
 
 /** ¿Hay al menos un guante enviando datos válidos? */

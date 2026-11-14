@@ -9,7 +9,7 @@
  *       id, label, createdAt,
  *       handMode: 'right' | 'left' | 'both',
  *       gestureType: 'static' | 'dynamic',
- *       samples: [{ vector: number[22] | number[220], at }]
+ *       samples: [{ vector: number[22] | number[352], at }]
  *     }
  *   ]
  * }
@@ -25,13 +25,14 @@ import {
   normalizeGestureType,
   normalizeHandMode,
 } from './knnClassifier.js'
+import { resampleTrajectory } from './trajectory.js'
 
 export const STORAGE_KEY = 'klaps.training.v1'
 export const SAMPLE_INTERVAL_MS = 50 // 20 Hz
-/** Seña estática: 20 fotogramas en 1 segundo. */
-export const STATIC_SAMPLES = 20
-/** Seña dinámica: 40 fotogramas en 2 segundos (recorrido completo). */
-export const DYNAMIC_SAMPLES = 40
+/** Seña estática: 40 fotogramas en 2 segundos (captura las micro-variaciones). */
+export const STATIC_SAMPLES = 40
+/** Seña dinámica: 80 fotogramas en 4 segundos (palabras largas sin cortes). */
+export const DYNAMIC_SAMPLES = 80
 export const MAX_SAMPLES_PER_SIGN = 400
 export const MAX_DYNAMIC_SAMPLES_PER_SIGN = 60
 
@@ -44,11 +45,13 @@ export const samplesForType = (gestureType) =>
 const isStaticVector = (value) =>
   Array.isArray(value) && value.length === FEATURE_SIZE && value.every(Number.isFinite)
 
-const isDynamicVector = (value) =>
-  Array.isArray(value) && value.length === DYNAMIC_FEATURE_SIZE && value.every(Number.isFinite)
-
-const isVectorFor = (gestureType, vector) =>
-  normalizeGestureType(gestureType) === 'dynamic' ? isDynamicVector(vector) : isStaticVector(vector)
+/** Trayectoria de cualquier longitud válida (22 × pasos), ya remuestreada a 16. */
+const normalizeDynamicVector = (value) => {
+  if (!Array.isArray(value) || value.length === 0 || value.length % FEATURE_SIZE !== 0) return null
+  if (!value.every(Number.isFinite)) return null
+  const resampled = resampleTrajectory(value, DYNAMIC_FEATURE_SIZE / FEATURE_SIZE)
+  return resampled?.every(Number.isFinite) ? resampled : null
+}
 
 /** Valida y normaliza cualquier objeto que llegue de localStorage o de un JSON importado. */
 export function normalizeTraining(raw) {
@@ -70,11 +73,16 @@ export function normalizeTraining(raw) {
         handMode,
         gestureType,
         samples: (Array.isArray(sign.samples) ? sign.samples : [])
-          .filter((sample) => isVectorFor(gestureType, sample?.vector))
-          .map((sample) => ({
-            vector: sample.vector.map((value) => Number(value)),
-            at: Number.isFinite(sample.at) ? sample.at : Date.now(),
-          }))
+          .map((sample) => {
+            const vector =
+              gestureType === 'dynamic'
+                ? normalizeDynamicVector(sample?.vector)
+                : isStaticVector(sample?.vector)
+                  ? sample.vector.map((value) => Number(value))
+                  : null
+            return vector ? { vector, at: Number.isFinite(sample.at) ? sample.at : Date.now() } : null
+          })
+          .filter(Boolean)
           .slice(0, limit),
       }
     })
@@ -128,11 +136,16 @@ export function withSamples(
   const mode = normalizeHandMode(handMode)
   const type = normalizeGestureType(gestureType)
   const valid = samples
-    .filter((sample) => isVectorFor(type, sample?.vector))
-    .map((sample) => ({
-      vector: sample.vector.map((value) => Number(value)),
-      at: Number.isFinite(sample.at) ? sample.at : Date.now(),
-    }))
+    .map((sample) => {
+      const vector =
+        type === 'dynamic'
+          ? normalizeDynamicVector(sample?.vector)
+          : isStaticVector(sample?.vector)
+            ? sample.vector.map((value) => Number(value))
+            : null
+      return vector ? { vector, at: Number.isFinite(sample.at) ? sample.at : Date.now() } : null
+    })
+    .filter(Boolean)
   if (valid.length === 0) return normalizeTraining(training)
 
   const base = normalizeTraining(training)

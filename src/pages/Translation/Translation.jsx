@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowRight,
@@ -6,9 +6,11 @@ import {
   Copy,
   GraduationCap,
   History,
+  MessageCircle,
   Pause,
   Play,
   Save,
+  Siren,
   Sparkles,
   Trash2,
   Volume2,
@@ -21,6 +23,8 @@ import StatusBadge from '../../components/common/StatusBadge'
 import ErrorMessage from '../../components/common/ErrorMessage'
 import SectionTitle from '../../components/common/SectionTitle'
 import ProgressBar from '../../components/common/ProgressBar'
+import Modal from '../../components/common/Modal'
+import { useAccessibility } from '../../context/accessibilityContext.js'
 import { useDevices } from '../../context/deviceContext.js'
 import { useHistory } from '../../context/historyContext.js'
 import { useAppSpeech } from '../../hooks/useAppSpeech.js'
@@ -29,10 +33,23 @@ import { useGestureRecognition } from '../../hooks/useGestureRecognition.js'
 import { CONFIDENCE_THRESHOLD } from '../../services/gesture/knnClassifier.js'
 import { improveSentence } from '../../services/gesture/sentence.js'
 import { loadTraining } from '../../services/gesture/trainingStore.js'
+import {
+  buildAlertMessage,
+  isEmergencyChannelReady,
+  requestLocation,
+  sendAlert,
+} from '../../services/emergency/sos.js'
+import { loadTelegramConfig } from '../../services/emergency/telegram.js'
 import { formatRelativeTime } from '../../utils/format.js'
 
 /** Etiquetas que disparan el flujo de emergencia. */
 const SOS_LABELS = /^(sos|emergencia|auxilio)$/i
+/** Repeticiones necesarias para que la alerta se envíe sola. */
+export const SOS_REPEATS = 3
+/** Ventana en la que cuentan las repeticiones. */
+export const SOS_WINDOW_MS = 15000
+/** Margen para cancelar antes del envío automático. */
+export const SOS_COUNTDOWN_SECONDS = 10
 
 export default function Translation() {
   const { entries, addEntry } = useHistory()
@@ -47,6 +64,27 @@ export default function Translation() {
   const [corrected, setCorrected] = useState(null)
   const [correctionNotes, setCorrectionNotes] = useState([])
   const [sosSign, setSosSign] = useState(null)
+
+  // ── SOS por 3 repeticiones + Telegram ──
+  const { preferences } = useAccessibility()
+  const [telegram, setTelegram] = useState(loadTelegramConfig)
+  const [sosCount, setSosCount] = useState(0)
+  const [sosPrompt, setSosPrompt] = useState(null)
+  const [sosLocation, setSosLocation] = useState(null)
+  const sosTimesRef = useRef([])
+
+  const channelReady = isEmergencyChannelReady(telegram)
+
+  // La configuración de Telegram puede cambiar en otra pantalla.
+  useEffect(() => {
+    const refresh = () => setTelegram(loadTelegramConfig())
+    window.addEventListener('focus', refresh)
+    window.addEventListener('storage', refresh)
+    return () => {
+      window.removeEventListener('focus', refresh)
+      window.removeEventListener('storage', refresh)
+    }
+  }, [])
 
   const signs = training.signs
   const connected = gloves.filter((glove) => glove.status === 'conectado').length
@@ -66,6 +104,20 @@ export default function Translation() {
     }
   }, [])
 
+  const openSosPrompt = useCallback(() => {
+    setSosPrompt({
+      phase: channelReady ? 'countdown' : 'missing',
+      countdown: SOS_COUNTDOWN_SECONDS,
+      result: null,
+      message: '',
+    })
+    speak('Emergencia')
+
+    if (preferences.shareLocation) {
+      requestLocation().then((response) => setSosLocation(response.location))
+    }
+  }, [channelReady, preferences.shareLocation, speak])
+
   const handleRecognize = useCallback(
     (result) => {
       const label = result.label.trim()
@@ -76,15 +128,25 @@ export default function Translation() {
       setCorrectionNotes([])
 
       if (SOS_LABELS.test(label)) {
-        setSosSign({ label, at: Date.now() })
-        speak('Emergencia')
+        // Tres repeticiones dentro de la ventana disparan la alerta.
+        const now = Date.now()
+        const times = [...sosTimesRef.current, now].filter((time) => now - time <= SOS_WINDOW_MS)
+        sosTimesRef.current = times
+        setSosCount(times.length)
+        setSosSign({ label, at: now, count: times.length })
+
+        if (times.length >= SOS_REPEATS) {
+          sosTimesRef.current = []
+          setSosCount(0)
+          openSosPrompt()
+        }
         return
       }
 
       setWords((previous) => [...previous, label])
       speak(label)
     },
-    [speak],
+    [openSosPrompt, speak],
   )
 
   // Si un guante no envía datos, sus señas no se evalúan (evita falsos positivos con ceros).
@@ -93,13 +155,51 @@ export default function Translation() {
     [readings],
   )
 
-  const { live } = useGestureRecognition({
+  const { live, resting, restReason } = useGestureRecognition({
     vector: featureVector,
+    readings,
     signs,
     enabled: listening,
     availableHands,
     onRecognize: handleRecognize,
   })
+
+  const sendSos = useCallback(async () => {
+    const message = buildAlertMessage({
+      contactName: preferences.emergencyContact?.name,
+      location: sosLocation,
+      repeats: SOS_REPEATS,
+    })
+
+    setSosPrompt((previous) => (previous ? { ...previous, phase: 'sending' } : previous))
+
+    const response = await sendAlert({
+      message,
+      contact: preferences.emergencyContact,
+      telegram,
+    })
+
+    setSosPrompt((previous) =>
+      previous ? { ...previous, phase: 'done', result: response, message } : previous,
+    )
+  }, [preferences, sosLocation, telegram])
+
+  // Cuenta atrás del aviso automático (el envío ocurre en el temporizador).
+  useEffect(() => {
+    if (sosPrompt?.phase !== 'countdown') return undefined
+
+    const timer = window.setTimeout(() => {
+      if (sosPrompt.countdown > 1) {
+        setSosPrompt((previous) =>
+          previous ? { ...previous, countdown: previous.countdown - 1 } : previous,
+        )
+      } else {
+        sendSos()
+      }
+    }, 1000)
+
+    return () => window.clearTimeout(timer)
+  }, [sosPrompt, sendSos])
 
   const applyCorrection = () => {
     const { text: improved, applied } = improveSentence(text)
@@ -214,6 +314,27 @@ export default function Translation() {
               · umbral {Math.round(CONFIDENCE_THRESHOLD * 100)} %
             </span>
           </div>
+          {listening && sosCount > 0 && (
+            <p className="mt-3 rounded-md bg-danger-soft px-3 py-2 text-xs font-semibold text-danger">
+              Señas de emergencia: {sosCount} de {SOS_REPEATS} · al llegar a {SOS_REPEATS} se envía la
+              alerta a tu contacto.
+            </p>
+          )}
+
+          {resting && (
+            <p
+              role="status"
+              className="mt-3 rounded-md bg-lavender px-3 py-2 text-sm font-semibold text-brand-800"
+            >
+              Manos en reposo (0) — traducción pausada
+              <span className="block text-xs font-normal text-ink-soft">
+                {restReason === 'pose'
+                  ? 'Puños cerrados con la palma hacia abajo: se reanuda al abrirlos.'
+                  : 'Se reconoció la seña de pausa: se reanuda al hacer otra seña.'}
+              </span>
+            </p>
+          )}
+
           <ProgressBar
             className="mt-2"
             value={(live?.progress ?? 0) * 100}
@@ -316,8 +437,9 @@ export default function Translation() {
             <div>
               <p className="font-display font-bold text-danger">Seña de emergencia detectada</p>
               <p className="mt-1 text-sm text-ink">
-                Se reconoció «{sosSign.label}». La alerta no se envía sola: confírmala en la pantalla
-                de emergencia.
+                Se reconoció «{sosSign.label}» ({sosSign.count ?? 1} de {SOS_REPEATS}). Repite la seña{' '}
+                {SOS_REPEATS} veces en 15 segundos para que la alerta se envíe sola
+                {channelReady ? ` a ${telegram.chatName || 'tu contacto'}.` : '.'}
               </p>
             </div>
             <div className="flex gap-2">
@@ -331,6 +453,133 @@ export default function Translation() {
           </div>
         </Card>
       )}
+
+      {/* Aviso automático tras 3 señas de SOS */}
+      <Modal
+        open={Boolean(sosPrompt)}
+        onClose={() => setSosPrompt(null)}
+        title={
+          !sosPrompt
+            ? ''
+            : sosPrompt.phase === 'sending'
+              ? 'Enviando la alerta'
+              : sosPrompt.phase === 'done'
+                ? sosPrompt.result?.delivered
+                  ? 'Alerta enviada'
+                  : 'La alerta no se envió'
+                : sosPrompt.phase === 'missing'
+                  ? 'Falta configurar el envío'
+                  : 'Señal de emergencia detectada'
+        }
+        description={
+          sosPrompt?.phase === 'countdown'
+            ? `Se reconoció la seña de SOS ${SOS_REPEATS} veces. La alerta se enviará sola si no la cancelas.`
+            : undefined
+        }
+        footer={
+          !sosPrompt || sosPrompt.phase === 'sending' ? null : (
+            <>
+              {sosPrompt.phase === 'countdown' && (
+                <>
+                  <Button variant="secondary" onClick={() => setSosPrompt(null)} className="sm:mr-auto">
+                    Cancelar
+                  </Button>
+                  <Button variant="danger" icon={Siren} onClick={sendSos}>
+                    Enviar ahora
+                  </Button>
+                </>
+              )}
+
+              {sosPrompt.phase === 'missing' && (
+                <>
+                  <Button variant="secondary" onClick={() => setSosPrompt(null)} className="sm:mr-auto">
+                    Cerrar
+                  </Button>
+                  <Button as={Link} to="/emergencia" variant="danger" icon={MessageCircle}>
+                    Configurar Telegram
+                  </Button>
+                </>
+              )}
+
+              {sosPrompt.phase === 'done' && (
+                <>
+                  {!sosPrompt.result?.delivered && (
+                    <Button variant="danger" onClick={sendSos} className="sm:mr-auto">
+                      Reintentar
+                    </Button>
+                  )}
+                  <Button variant="secondary" onClick={() => setSosPrompt(null)}>
+                    Cerrar
+                  </Button>
+                </>
+              )}
+            </>
+          )
+        }
+      >
+        {sosPrompt?.phase === 'countdown' && (
+          <div className="text-center">
+            <p aria-live="assertive" className="font-display text-6xl font-extrabold text-danger">
+              {sosPrompt.countdown}
+            </p>
+            <p className="mt-2 text-sm text-ink">
+              Se enviará por Telegram a{' '}
+              <strong>{telegram.chatName || preferences.emergencyContact?.name || telegram.chatId}</strong>
+              {sosLocation ? ' con tu ubicación aproximada.' : '.'}
+            </p>
+            {!sosLocation && preferences.shareLocation && (
+              <p className="mt-2 text-xs text-ink-soft">Solicitando tu ubicación…</p>
+            )}
+          </div>
+        )}
+
+        {sosPrompt?.phase === 'missing' && (
+          <div className="space-y-2 text-sm text-ink">
+            <p>
+              Sin un canal conectado, KLAPS no puede avisar a nadie: el mensaje se prepararía pero no
+              saldría de este dispositivo. No se simula un envío.
+            </p>
+            <p className="text-ink-soft">
+              Ve a <strong className="text-ink">Emergencia SOS</strong>, crea el bot con @BotFather y
+              elige el contacto. Después vuelve aquí: la seña de SOS enviará la alerta sola.
+            </p>
+          </div>
+        )}
+
+        {sosPrompt?.phase === 'sending' && (
+          <p className="text-sm text-ink">Esperando la respuesta de Telegram…</p>
+        )}
+
+        {sosPrompt?.phase === 'done' && (
+          <div className="space-y-3 text-sm">
+            <p
+              className={
+                sosPrompt.result?.delivered ? 'font-semibold text-success' : 'font-semibold text-danger'
+              }
+            >
+              {sosPrompt.result?.reason}
+            </p>
+            <pre className="overflow-x-auto rounded-md bg-brand-50 p-3 text-xs whitespace-pre-wrap text-ink">
+              {sosPrompt.message}
+            </pre>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="secondary" icon={Copy} onClick={() => copy(sosPrompt.message)}>
+                {copied ? 'Copiado' : 'Copiar mensaje'}
+              </Button>
+              {preferences.emergencyContact?.phone && (
+                <Button
+                  as="a"
+                  href={`tel:${preferences.emergencyContact.phone}`}
+                  size="sm"
+                  variant="secondary"
+                >
+                  Llamar a {preferences.emergencyContact.name || 'contacto'}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <section aria-labelledby="sesion-titulo" className="mt-6">
         <SectionTitle
