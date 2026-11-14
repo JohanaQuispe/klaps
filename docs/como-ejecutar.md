@@ -87,12 +87,25 @@ npm run dev
 
 Cuando aparezca `Local: http://localhost:5173/`, abre esa dirección en **Chrome, Edge u Opera**.
 
-### d) Atajo: doble clic
+### d) Comprobar que la carpeta es la correcta
+
+Antes de arrancar, dos comprobaciones rápidas en la carpeta donde vas a ejecutar `npm run dev`:
+
+```powershell
+dir src\data\appInfo.js
+dir src\pages\Devices\Diagnostics.jsx
+```
+
+Si alguno dice «no se encuentra», estás en una **copia antigua** del proyecto. También puedes
+usar `iniciar-klaps.bat`: imprime la carpeta y la versión, y se niega a arrancar si los archivos
+no son los de la versión actual.
+
+### e) Atajo: doble clic
 
 El archivo **`iniciar-klaps.bat`** de la raíz hace todo lo anterior: comprueba Node, instala las
 dependencias si faltan, abre el navegador y arranca el servidor. Sirve para el día a día.
 
-### e) Detener
+### f) Detener
 
 `Ctrl + C` en la terminal (o cierra la ventana). Para volver a entrar más tarde basta con
 `iniciar-klaps.bat` o `npm run dev`: no hace falta repetir `npm install`.
@@ -139,6 +152,7 @@ npm run preview   # sirve dist/ en http://localhost:4173
 | `EINVALIDTAGNAME Invalid tag name "#"` | Copiaste los comentarios `#`. En **cmd** no son comentarios: ejecuta cada comando sin el texto que sigue al `#`. |
 | `El sistema no puede encontrar la ruta especificada` | La carpeta `klaps` no existe todavía: clónala o descomprime el ZIP primero. |
 | `Missing script: "dev"` | Estás fuera de la carpeta del proyecto (debe contener `package.json`). `cd` a ella. |
+| Sigue apareciendo una versión antigua | Hay **dos carpetas** del proyecto. El servidor arranca desde la carpeta equivocada: mira la ruta en el símbolo del sistema y compárala con la que abriste en el editor. |
 | «node no se reconoce como comando» | Node.js no está instalado o no quedó en el PATH; reinstala y reabre la terminal. |
 | `EADDRINUSE` (puerto ocupado) | Vite cambia de puerto solo; o cierra el proceso anterior con `Ctrl + C`. |
 | La página sale en blanco | Mira la consola del navegador; suele ser una dependencia sin instalar. Repite `npm install`. |
