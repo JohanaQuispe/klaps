@@ -20,14 +20,16 @@ export const BLE_GLOVES = {
     id: 'derecho',
     label: 'Guante derecho',
     board: 'ESP32-D',
-    // Nombre real anunciado por la placa (visto en el diagnóstico BLE).
+    // Nombres que puede anunciar la placa derecha (se prueban todos).
+    namePrefixes: ['KLAPS_Guante_D', 'KLAPS-D', 'ESP32-D'],
     namePrefix: 'KLAPS_Guante_D',
   },
   izquierdo: {
     id: 'izquierdo',
     label: 'Guante izquierdo',
     board: 'ESP32-U',
-    // Ajustar si la placa izquierda anuncia otro nombre.
+    // Nombres que puede anunciar la placa izquierda (se prueban todos).
+    namePrefixes: ['KLAPS_Guante_I', 'KLAPS-U', 'ESP32-U'],
     namePrefix: 'KLAPS_Guante_I',
   },
 }

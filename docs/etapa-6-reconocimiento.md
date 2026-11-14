@@ -92,7 +92,8 @@ aplicaron. No es un modelo de lenguaje y no reescribe el significado.
 ## 9. Configuración de UUID
 
 Los UUID no se escriben en el código: se guardan en el navegador (`klaps.ble.serviceUuid`,
-`klaps.ble.sensorsUuid`) desde:
+`klaps.ble.sensorsUuid`). Se aceptan con guiones, sin guiones (32 caracteres), con prefijo `0x` y
+en mayúsculas; se normalizan al guardar. Desde:
 
 - `/entrenamiento` → tarjeta «Conexión y UUID del firmware».
 - `/dispositivos/diagnostico` → tarjeta «Servicio propio del guante».

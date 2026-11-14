@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Bluetooth, Copy, FlaskConical, Plug, Radio, ScanLine, Trash2, Unplug } from 'lucide-react'
 import PageHeader from '../../components/layout/PageHeader'
 import Card from '../../components/common/Card'
@@ -10,6 +11,8 @@ import { useBleDevice } from '../../hooks/useBleDevice.js'
 import { useClipboard } from '../../hooks/useClipboard.js'
 import { BLE_CONFIG, BLE_GLOVES } from '../../services/bluetooth/bleConfig.js'
 import { describeBluetoothBlockReason, shortUuid } from '../../services/bluetooth/bleClient.js'
+import { parseFrame } from '../../services/bluetooth/sensorFrame.js'
+import ProgressBar from '../../components/common/ProgressBar'
 import {
   isValidUuid,
   loadUuidSettings,
@@ -47,8 +50,14 @@ export default function Diagnostics() {
   const { copy, copied, error: copyError } = useClipboard()
   const [target, setTarget] = useState('cualquiera')
   const [savedUuids, setSavedUuids] = useState(loadUuidSettings)
+  const [saveMessage, setSaveMessage] = useState('')
   const [serviceInput, setServiceInput] = useState(savedUuids.service)
   const [sensorsInput, setSensorsInput] = useState(savedUuids.sensors)
+
+  const frame = useMemo(
+    () => parseFrame(ble.lastPacket?.bytes ?? null, ble.lastPacket?.at),
+    [ble.lastPacket],
+  )
 
   const bluetoothNotice = describeBluetoothBlockReason(
     ble.blockReason,
@@ -74,7 +83,7 @@ export default function Diagnostics() {
       ble.connect({ namePrefix: BLE_CONFIG.namePrefixes[1], extraServices })
       return
     }
-    ble.connect({ namePrefix: BLE_GLOVES[target].namePrefix, extraServices })
+    ble.connect({ namePrefixes: BLE_GLOVES[target].namePrefixes ?? [BLE_GLOVES[target].namePrefix], extraServices })
   }
 
   const saveUuids = () => {
@@ -82,6 +91,11 @@ export default function Diagnostics() {
     setSavedUuids(next)
     setServiceInput(next.service)
     setSensorsInput(next.sensors)
+    setSaveMessage(
+      next.service && next.sensors
+        ? 'Guardados en este navegador. Ya puedes probar la lectura aquí abajo.'
+        : 'Guardado parcial: revisa los dos UUID.',
+    )
   }
 
   const clearUuids = () => {
@@ -89,6 +103,7 @@ export default function Diagnostics() {
     setSavedUuids(next)
     setServiceInput('')
     setSensorsInput('')
+    setSaveMessage('UUID borrados de este navegador.')
   }
 
   const uuidSummary = ble.services
@@ -226,7 +241,7 @@ export default function Diagnostics() {
           className="flex items-center gap-2 font-display text-lg font-extrabold text-brand-800"
         >
           <Plug className="size-5 text-brand-600" aria-hidden="true" />
-          Servicio propio del guante (opcional)
+          UUID del firmware del guante
         </h2>
         <p className="mt-1 text-sm text-ink-soft">
           Web Bluetooth solo puede explorar los servicios que se declaran al conectar. Pega el UUID
@@ -287,7 +302,88 @@ export default function Diagnostics() {
 
         {(savedUuids.service || savedUuids.sensors) && (
           <p className="mt-3 rounded-md bg-brand-50 px-3 py-2 font-mono text-xs font-semibold break-all text-brand-800">
-            Servicio {savedUuids.service || '—'} · sensores {savedUuids.sensors || '—'}
+            Guardado: servicio {savedUuids.service || '—'} · sensores {savedUuids.sensors || '—'}
+          </p>
+        )}
+
+        {saveMessage && (
+          <p className="mt-2 text-sm font-semibold text-success" role="status">
+            {saveMessage}
+          </p>
+        )}
+
+        <p className="mt-3 text-xs text-ink-soft">
+          La conexión de esta pantalla es solo para diagnóstico: no cuenta como guante conectado en
+          el panel. Para usarla en Inicio y en Traducción, conecta el guante desde{' '}
+          <Link to="/dispositivos" className="font-semibold text-brand-700 underline underline-offset-2">
+            Guantes
+          </Link>{' '}
+          o desde{' '}
+          <Link to="/entrenamiento" className="font-semibold text-brand-700 underline underline-offset-2">
+            Entrenamiento
+          </Link>
+          .
+        </p>
+      </Card>
+
+      <Card as="section" aria-labelledby="probar-lectura" padding="lg" className="mt-6">
+        <h2
+          id="probar-lectura"
+          className="flex items-center gap-2 font-display text-lg font-extrabold text-brand-800"
+        >
+          <Radio className="size-5 text-brand-600" aria-hidden="true" />
+          Probar lectura de sensores
+        </h2>
+        <p className="mt-1 text-sm text-ink-soft">
+          Suscríbete a la característica con los UUID guardados. Si llega la trama de 34 bytes,
+          verás los flex y el MPU-6050 aquí mismo.
+        </p>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button
+            icon={Radio}
+            onClick={() =>
+              ble.subscribe({
+                serviceUuid: savedUuids.service,
+                characteristicUuid: savedUuids.sensors,
+              })
+            }
+            disabled={ble.status !== 'connected' || !savedUuids.service || !savedUuids.sensors}
+          >
+            Escuchar sensores
+          </Button>
+          <span className="text-sm text-ink-soft">
+            {ble.packetCount} paquetes recibidos
+            {frame ? ` · último ${new Date(frame.at).toLocaleTimeString('es')}` : ''}
+          </span>
+        </div>
+
+        {frame ? (
+          <div className="mt-4 rounded-md bg-brand-50 p-4">
+            <p className="text-sm font-semibold text-brand-800">Flex (0-100 %)</p>
+            <ul className="mt-2 space-y-1.5">
+              {frame.flex.map((value, index) => (
+                <li key={index} className="flex items-center gap-2">
+                  <span className="w-12 text-xs text-ink-soft">flex {index}</span>
+                  <ProgressBar value={value} size="sm" className="flex-1" />
+                  <span className="w-10 text-right text-xs font-semibold text-ink">
+                    {Math.round(value)} %
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 font-mono text-xs text-ink">
+              ax {frame.imu.ax.toFixed(2)} · ay {frame.imu.ay.toFixed(2)} · az {frame.imu.az.toFixed(2)} ·
+              gx {frame.imu.gx.toFixed(2)} · gy {frame.imu.gy.toFixed(2)} · gz {frame.imu.gz.toFixed(2)}
+            </p>
+          </div>
+        ) : (
+          <p className="mt-4 rounded-md border border-dashed border-brand-200 px-4 py-3 text-sm text-ink-soft">
+            {ble.status !== 'connected'
+              ? 'Conecta un guante primero.'
+              : !savedUuids.service || !savedUuids.sensors
+                ? 'Guarda los dos UUID para poder suscribirte.'
+                : 'Sin tramas todavía. Pulsa «Escuchar sensores».'}
           </p>
         )}
       </Card>

@@ -129,7 +129,7 @@ export default function DeviceProvider({ children }) {
       const glove = BLE_GLOVES[id]
       if (!session || !glove) return
       attemptedSubscriptions.current = new Set()
-      session.connect({ namePrefix: glove.namePrefix })
+      session.connect({ namePrefixes: glove.namePrefixes ?? [glove.namePrefix] })
     },
     [izquierdo, derecho],
   )
