@@ -19,7 +19,10 @@ npm install
 npm run dev      # http://localhost:5173
 ```
 
-Guía completa —requisitos, comprobaciones y problemas frecuentes— en
+En **Windows** puedes hacer doble clic en **`iniciar-klaps.bat`**: comprueba Node, instala lo que
+falte y abre el navegador.
+
+Guía completa —requisitos, Windows paso a paso, comprobaciones y problemas frecuentes— en
 [`docs/como-ejecutar.md`](docs/como-ejecutar.md).
 
 Otros comandos:
