@@ -128,10 +128,35 @@ export default function DeviceProvider({ children }) {
       const session = id === 'izquierdo' ? izquierdo : derecho
       const glove = BLE_GLOVES[id]
       if (!session || !glove) return
-      attemptedSubscriptions.current = new Set()
-      session.connect({ namePrefixes: glove.namePrefixes ?? [glove.namePrefix] })
+
+      // Se limpian solo los intentos de este guante, no los del otro.
+      for (const key of [...attemptedSubscriptions.current]) {
+        if (key.startsWith(`${id}:`)) attemptedSubscriptions.current.delete(key)
+      }
+
+      session.connect({
+        namePrefixes: glove.namePrefixes ?? [glove.namePrefix],
+        // El servicio propio debe declararse ANTES de conectar o el navegador lo bloquea.
+        extraServices: uuidSettings.service ? [uuidSettings.service] : [],
+      })
     },
-    [izquierdo, derecho],
+    [izquierdo, derecho, uuidSettings.service],
+  )
+
+  /** Suscribe manualmente a la característica de sensores (por si falló al conectar). */
+  const subscribeSensors = useCallback(
+    (id) => {
+      if (!configured) return
+      const session = id === 'izquierdo' ? izquierdo : derecho
+      if (!session || session.status !== 'connected') return
+
+      attemptedSubscriptions.current.add(`${id}:${uuidSettings.service}:${uuidSettings.sensors}`)
+      session.subscribe({
+        serviceUuid: uuidSettings.service,
+        characteristicUuid: uuidSettings.sensors,
+      })
+    },
+    [configured, izquierdo, derecho, uuidSettings.service, uuidSettings.sensors],
   )
 
   const disconnect = useCallback(
@@ -144,10 +169,22 @@ export default function DeviceProvider({ children }) {
     [izquierdo, derecho],
   )
 
-  const gloves = useMemo(
-    () => [toGlove('izquierdo', izquierdo), toGlove('derecho', derecho)],
-    [izquierdo, derecho],
-  )
+  // Estado de sensores por guante: si está suscrito y si la trama tiene el tamaño esperado.
+  const gloves = useMemo(() => {
+    const pairs = [
+      [toGlove('izquierdo', izquierdo), izquierdo, izquierdoReading],
+      [toGlove('derecho', derecho), derecho, derechoReading],
+    ]
+
+    return pairs.map(([glove, session, reading]) => {
+      const bytes = session.lastPacket?.bytes?.length ?? 0
+      return {
+        ...glove,
+        sensorsListening: (session.subscriptions ?? []).length > 0,
+        frameIssue: bytes > 0 && !reading ? `Trama de ${bytes} bytes; se esperaban 34.` : '',
+      }
+    })
+  }, [izquierdo, derecho, izquierdoReading, derechoReading])
 
   const readings = useMemo(
     () => ({ derecho: derechoReading, izquierdo: izquierdoReading }),
@@ -171,6 +208,7 @@ export default function DeviceProvider({ children }) {
       packetCount: (derecho.packetCount ?? 0) + (izquierdo.packetCount ?? 0),
       connect,
       disconnect,
+      subscribeSensors,
       // `reconnect` se mantiene como alias para no romper las pantallas existentes.
       reconnect: connect,
     }),
@@ -186,6 +224,7 @@ export default function DeviceProvider({ children }) {
       izquierdo.packetCount,
       connect,
       disconnect,
+      subscribeSensors,
     ],
   )
 

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Clock, Hand, Power, RefreshCw, SlidersHorizontal } from 'lucide-react'
+import { Activity, Clock, Hand, Power, RefreshCw, SlidersHorizontal } from 'lucide-react'
 import Button from '../common/Button'
 import StatusBadge from '../common/StatusBadge'
 import ProgressBar from '../common/ProgressBar'
@@ -50,7 +50,14 @@ function SignalBars({ bars }) {
 }
 
 /** Tarjeta completa de un guante (pantalla Dispositivos). Solo datos reales. */
-export default function DeviceCard({ glove, onReconnect, onDisconnect, onRequestConnect }) {
+export default function DeviceCard({
+  glove,
+  onReconnect,
+  onDisconnect,
+  onRequestConnect,
+  onSubscribe,
+  sensorsConfigured = false,
+}) {
   const battery = batteryState(glove.battery)
   const signal = signalState(glove.rssi)
   const isConnected = glove.status === GLOVE_STATUS.CONECTADO
@@ -85,7 +92,9 @@ export default function DeviceCard({ glove, onReconnect, onDisconnect, onRequest
               valueLabel={formatBattery(glove.battery)}
               tone={batteryTone}
             />
-            <p className="mt-1 text-xs font-medium text-ink-soft">{battery.label}</p>
+            <p className="mt-1 text-xs font-medium text-ink-soft">
+              {battery.label} · publicada por el dispositivo
+            </p>
           </div>
         ) : (
           <div className="flex items-center justify-between gap-3 rounded-md bg-brand-50 px-3.5 py-3">
@@ -94,13 +103,52 @@ export default function DeviceCard({ glove, onReconnect, onDisconnect, onRequest
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-3 rounded-md bg-brand-50 px-3.5 py-3">
-          <span className="text-sm font-medium text-ink-soft">Señal (RSSI)</span>
-          <span className="flex items-center gap-2 text-sm font-semibold text-ink">
-            <SignalBars bars={signal.bars} />
-            <span>{signal.label}</span>
-          </span>
+        <div className="rounded-md bg-brand-50 px-3.5 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-medium text-ink-soft">Señal (RSSI)</span>
+            <span className="flex items-center gap-2 text-sm font-semibold text-ink">
+              <SignalBars bars={signal.bars} />
+              <span>{signal.label}</span>
+            </span>
+          </div>
+          <p className="mt-1 text-[0.7rem] leading-snug text-ink-soft">
+            Web Bluetooth no expone la intensidad de señal de un dispositivo conectado.
+          </p>
         </div>
+
+        {isConnected && (
+          <div className="rounded-md border border-brand-100 px-3.5 py-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2 text-sm font-medium text-ink-soft">
+                <Activity className="size-4" aria-hidden="true" />
+                Sensores
+              </span>
+              <span className="text-sm font-semibold text-ink">
+                {glove.sensorsListening ? `Escuchando · ${glove.frames} tramas` : 'Sin suscribir'}
+              </span>
+            </div>
+
+            {!glove.sensorsListening && (
+              <p className="mt-1 text-[0.7rem] leading-snug text-ink-soft">
+                {sensorsConfigured
+                  ? 'Pulsa «Activar sensores». Si vuelve a fallar, desconecta y conecta de nuevo.'
+                  : 'Guarda los UUID del servicio y de sensores en el diagnóstico o en Entrenamiento.'}
+              </p>
+            )}
+
+            {glove.sensorsListening && glove.frames > 0 && !glove.frameIssue && (
+              <p className="mt-1 text-[0.7rem] leading-snug text-success">
+                Recibiendo la trama de 34 bytes.
+              </p>
+            )}
+
+            {glove.frameIssue && (
+              <p className="mt-1 text-[0.7rem] font-semibold leading-snug text-danger">
+                {glove.frameIssue}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="flex items-center gap-2 text-sm text-ink-soft">
           <Clock className="size-4 shrink-0" aria-hidden="true" />
@@ -132,6 +180,11 @@ export default function DeviceCard({ glove, onReconnect, onDisconnect, onRequest
             disabled={isConnecting}
           >
             {isConnecting ? 'Conectando…' : 'Conectar'}
+          </Button>
+        )}
+        {isConnected && !glove.sensorsListening && sensorsConfigured && (
+          <Button size="sm" variant="secondary" icon={Activity} onClick={() => onSubscribe?.(glove.id)}>
+            Activar sensores
           </Button>
         )}
         <Button
