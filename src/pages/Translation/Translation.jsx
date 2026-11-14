@@ -38,7 +38,7 @@ export default function Translation() {
   const { entries, addEntry } = useHistory()
   const { supported: speechSupported, speak, speaking, stop: stopSpeech } = useAppSpeech()
   const { copied, error: copyError, copy } = useClipboard()
-  const { featureVector, hasReadings, protocolConfigured, gloves } = useDevices()
+  const { featureVector, readings, hasReadings, protocolConfigured, gloves } = useDevices()
 
   const [training, setTraining] = useState(loadTraining)
   const [listening, setListening] = useState(false)
@@ -87,10 +87,17 @@ export default function Translation() {
     [speak],
   )
 
+  // Si un guante no envía datos, sus señas no se evalúan (evita falsos positivos con ceros).
+  const availableHands = useMemo(
+    () => ({ right: Boolean(readings.derecho), left: Boolean(readings.izquierdo) }),
+    [readings],
+  )
+
   const { live } = useGestureRecognition({
     vector: featureVector,
     signs,
     enabled: listening,
+    availableHands,
     onRecognize: handleRecognize,
   })
 
@@ -210,8 +217,14 @@ export default function Translation() {
           <ProgressBar
             className="mt-2"
             value={(live?.progress ?? 0) * 100}
-            label="Estabilización"
-            valueLabel={`${Math.round((live?.progress ?? 0) * 100)} % de 0,6 s`}
+            label={live?.mode === 'dynamic' ? 'Confirmación del recorrido' : 'Estabilización'}
+            valueLabel={
+              live?.mode === 'dynamic'
+                ? live.stable
+                  ? 'Reconocida'
+                  : 'Confirmando'
+                : `${Math.round((live?.progress ?? 0) * 100)} % de 0,6 s`
+            }
             tone={live?.stable ? 'success' : 'brand'}
             size="sm"
           />

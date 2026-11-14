@@ -3,23 +3,57 @@ import {
   CONFIDENCE_THRESHOLD,
   K,
   classify,
+  classifyTrajectory,
   flattenSamples,
 } from '../services/gesture/knnClassifier.js'
+import { trajectoryFromFrames } from '../services/gesture/trajectory.js'
 
 /** Bucle de clasificación: 20 Hz, igual que la frecuencia de la trama. */
 export const LOOP_MS = 50
-/** La misma seña debe mantenerse este tiempo antes de darla por buena. */
+/** Seña estática: debe mantenerse este tiempo antes de darla por buena. */
 export const HOLD_MS = 600
+/**
+ * Seña dinámica: basta con que la trayectoria supere el umbral durante
+ * dos ciclos (100 ms). No se exige quedarse quieto al terminar el gesto.
+ */
+export const DYNAMIC_CONFIRM_MS = 100
 /** Tras reconocer una seña no se repite hasta pasado este tiempo. */
 export const COOLDOWN_MS = 1500
+/** Ventana deslizante de la seña dinámica: 40 fotogramas = 2 s a 20 Hz. */
+export const DYNAMIC_WINDOW_FRAMES = 40
+
+const ALL_HANDS = { right: true, left: true }
+
+/** ¿Está conectado el guante (o guantes) que necesita la seña? */
+function hasRequiredHands(handMode, available) {
+  if (handMode === 'right') return Boolean(available.right)
+  if (handMode === 'left') return Boolean(available.left)
+  return Boolean(available.right && available.left)
+}
+
+const liveState = (result, progress, stable, mode) => ({
+  label: result.label,
+  confidence: result.confidence,
+  distance: result.distance,
+  handMode: result.handMode,
+  mode,
+  progress,
+  stable,
+})
 
 /**
- * Reconocimiento en tiempo real con estabilización (anti-rebote).
+ * Reconocimiento en tiempo real con dos caminos:
  *
- * Cada 50 ms clasifica el vector bimanual contra las muestras entrenadas.
- * Solo emite cuando la confianza supera el umbral Y la misma etiqueta se
- * mantiene estable durante `holdMs`; después aplica un tiempo de espera para
- * no repetir la palabra mientras la mano sigue en la misma postura.
+ * · Estáticas: cada 50 ms clasifica el fotograma y exige que la misma etiqueta
+ *   se mantenga `holdMs` (600 ms) por encima del umbral.
+ *
+ * · Dinámicas: mantiene una ventana deslizante de 2 s (40 fotogramas),
+ *   recorta el silencio de los extremos, la resume en 10 pasos clave y la
+ *   compara con las trayectorias grabadas. Si el gesto supera el umbral y se
+ *   confirma en dos ciclos, se emite de inmediato: no hay que quedarse quieto
+ *   después del movimiento.
+ *
+ * Ambas comparten el enfriamiento (`cooldownMs`) para no repetir la palabra.
  */
 export function useGestureRecognition({
   vector,
@@ -28,12 +62,18 @@ export function useGestureRecognition({
   onRecognize,
   threshold = CONFIDENCE_THRESHOLD,
   holdMs = HOLD_MS,
+  dynamicConfirmMs = DYNAMIC_CONFIRM_MS,
   cooldownMs = COOLDOWN_MS,
+  windowFrames = DYNAMIC_WINDOW_FRAMES,
+  availableHands = ALL_HANDS,
 } = {}) {
   const vectorRef = useRef(vector)
   const samplesRef = useRef([])
   const onRecognizeRef = useRef(onRecognize)
-  const candidateRef = useRef(null)
+  const handsRef = useRef(availableHands)
+  const staticCandidateRef = useRef(null)
+  const dynamicCandidateRef = useRef(null)
+  const bufferRef = useRef([])
   const cooldownUntilRef = useRef(0)
 
   const [live, setLive] = useState(null)
@@ -48,69 +88,132 @@ export function useGestureRecognition({
   }, [onRecognize])
 
   useEffect(() => {
+    handsRef.current = availableHands
+  }, [availableHands])
+
+  useEffect(() => {
     samplesRef.current = flattenSamples(signs)
   }, [signs])
 
   useEffect(() => {
-    candidateRef.current = null
+    staticCandidateRef.current = null
+    dynamicCandidateRef.current = null
+    bufferRef.current = []
     cooldownUntilRef.current = 0
     if (!enabled) return undefined
 
     const timer = window.setInterval(() => {
-      const samples = samplesRef.current
       const current = vectorRef.current
+      const hands = handsRef.current ?? ALL_HANDS
+      const samples = (samplesRef.current ?? []).filter((sample) =>
+        hasRequiredHands(sample.handMode, hands),
+      )
 
-      if (!samples || samples.length === 0 || !current) {
-        candidateRef.current = null
-        setLive(null)
-        return
-      }
-
-      const result = classify(current, samples, K)
-      if (!result) {
-        candidateRef.current = null
+      if (!current || samples.length === 0) {
+        staticCandidateRef.current = null
+        dynamicCandidateRef.current = null
         setLive(null)
         return
       }
 
       const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
+      const dynamicSamples = samples.filter((sample) => sample.type === 'dynamic')
+      const staticSamples = samples.filter((sample) => sample.type !== 'dynamic')
 
-      if (result.confidence < threshold) {
-        candidateRef.current = null
-        setLive({ label: result.label, confidence: result.confidence, progress: 0, stable: false })
+      // ── 1. Trayectoria (señas dinámicas) ────────────────────────────────
+      let handledByDynamic = false
+
+      if (dynamicSamples.length > 0) {
+        const buffer = bufferRef.current
+        buffer.push(current)
+        if (buffer.length > windowFrames) buffer.splice(0, buffer.length - windowFrames)
+
+        const trajectory = trajectoryFromFrames(buffer)
+        const dynamicResult = trajectory ? classifyTrajectory(trajectory, dynamicSamples, K) : null
+        const withinThreshold =
+          dynamicResult &&
+          dynamicResult.confidence >= threshold &&
+          now >= cooldownUntilRef.current
+
+        if (!withinThreshold) {
+          dynamicCandidateRef.current = null
+        } else {
+          handledByDynamic = true
+          const candidate = dynamicCandidateRef.current
+
+          if (!candidate || candidate.label !== dynamicResult.label) {
+            dynamicCandidateRef.current = { label: dynamicResult.label, since: now }
+            setLive(liveState(dynamicResult, 0, false, 'dynamic'))
+          } else {
+            const held = now - candidate.since
+            const progress = Math.min(1, held / dynamicConfirmMs)
+            const ready = held >= dynamicConfirmMs
+
+            setLive(liveState(dynamicResult, progress, ready, 'dynamic'))
+
+            if (ready) {
+              cooldownUntilRef.current = now + cooldownMs
+              dynamicCandidateRef.current = null
+              staticCandidateRef.current = null
+              bufferRef.current = []
+              const result = { ...dynamicResult, mode: 'dynamic' }
+              setEmitted({ ...result, at: Date.now() })
+              onRecognizeRef.current?.(result)
+              return
+            }
+          }
+        }
+      }
+
+      // La trayectoria tiene prioridad: no se mezcla con la clasificación estática.
+      if (handledByDynamic) return
+
+      // ── 2. Fotograma (señas estáticas) ──────────────────────────────────
+      if (staticSamples.length === 0) {
+        setLive(null)
         return
       }
 
-      if (!candidateRef.current || candidateRef.current.label !== result.label) {
-        candidateRef.current = { label: result.label, since: now }
-        setLive({ label: result.label, confidence: result.confidence, progress: 0, stable: false })
+      const result = classify(current, staticSamples, K)
+      if (!result || result.confidence < threshold) {
+        staticCandidateRef.current = null
+        setLive(
+          result
+            ? liveState(result, 0, false, 'static')
+            : null,
+        )
         return
       }
 
-      const held = now - candidateRef.current.since
+      const candidate = staticCandidateRef.current
+      if (!candidate || candidate.label !== result.label) {
+        staticCandidateRef.current = { label: result.label, since: now }
+        setLive(liveState(result, 0, false, 'static'))
+        return
+      }
+
+      const held = now - candidate.since
       const progress = Math.min(1, held / holdMs)
       const readyToEmit = held >= holdMs && now >= cooldownUntilRef.current
 
-      setLive({
-        label: result.label,
-        confidence: result.confidence,
-        progress,
-        stable: readyToEmit,
-      })
+      setLive(liveState(result, progress, readyToEmit, 'static'))
 
       if (readyToEmit) {
         cooldownUntilRef.current = now + cooldownMs
-        candidateRef.current = null
-        setEmitted({ ...result, at: Date.now() })
-        onRecognizeRef.current?.(result)
+        staticCandidateRef.current = null
+        const payload = { ...result, mode: 'static' }
+        setEmitted({ ...payload, at: Date.now() })
+        onRecognizeRef.current?.(payload)
       }
     }, LOOP_MS)
 
     return () => {
       window.clearInterval(timer)
-      candidateRef.current = null
+      staticCandidateRef.current = null
+      dynamicCandidateRef.current = null
+      bufferRef.current = []
     }
-  }, [enabled, threshold, holdMs, cooldownMs])
+  }, [enabled, threshold, holdMs, dynamicConfirmMs, cooldownMs, windowFrames])
 
   // Al detener, la interfaz no debe seguir mostrando la última candidata.
   return { live: enabled ? live : null, emitted }

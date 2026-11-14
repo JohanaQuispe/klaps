@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -18,16 +18,26 @@ import StatusBadge from '../../components/common/StatusBadge'
 import ErrorMessage from '../../components/common/ErrorMessage'
 import SectionTitle from '../../components/common/SectionTitle'
 import ProgressBar from '../../components/common/ProgressBar'
+import SegmentedControl from '../../components/common/SegmentedControl'
 import { useDevices } from '../../context/deviceContext.js'
 import { useGestureRecognition } from '../../hooks/useGestureRecognition.js'
 import { isValidUuid } from '../../services/bluetooth/uuidSettings.js'
-import { CONFIDENCE_THRESHOLD, flattenSamples } from '../../services/gesture/knnClassifier.js'
 import {
-  SAMPLES_PER_SIGN,
+  CONFIDENCE_THRESHOLD,
+  GESTURE_TYPE_LABELS,
+  HAND_MODE_LABELS,
+  flattenSamples,
+  summarizeSigns,
+} from '../../services/gesture/knnClassifier.js'
+import { trajectoryFromFrames } from '../../services/gesture/trajectory.js'
+import {
+  DYNAMIC_SAMPLES,
   SAMPLE_INTERVAL_MS,
+  STATIC_SAMPLES,
   exportTraining,
   importTraining,
   loadTraining,
+  samplesForType,
   saveTraining,
   totalSamples,
   withSamples,
@@ -69,6 +79,8 @@ export default function Training() {
   const [sensorsUuid, setSensorsUuid] = useState(uuidSettings.sensors)
 
   const [label, setLabel] = useState('')
+  const [handMode, setHandMode] = useState('both')
+  const [gestureType, setGestureType] = useState('static')
   const [capturing, setCapturing] = useState(false)
   const [captureProgress, setCaptureProgress] = useState(0)
   const [message, setMessage] = useState('')
@@ -79,13 +91,29 @@ export default function Training() {
 
   const signs = training.signs
   const samples = flattenSamples(signs)
+  const summary = summarizeSigns(signs)
   const connected = gloves.filter((glove) => glove.status === 'conectado').length
+  const total = samplesForType(gestureType)
+
+  // Solo se comparan las señas cuyos guantes están enviando datos.
+  const availableHands = useMemo(
+    () => ({ right: Boolean(readings.derecho), left: Boolean(readings.izquierdo) }),
+    [readings],
+  )
 
   const { live } = useGestureRecognition({
     vector: featureVector,
     signs,
     enabled: testing,
+    availableHands,
     onRecognize: (result) => setLastTest({ ...result, at: Date.now() }),
+  })
+
+  // Señas que no se pueden evaluar ahora mismo por falta de algún guante.
+  const skippedSigns = signs.filter((sign) => {
+    if (sign.handMode === 'right') return !availableHands.right
+    if (sign.handMode === 'left') return !availableHands.left
+    return !(availableHands.right && availableHands.left)
   })
 
   const saveUuids = () => {
@@ -113,23 +141,58 @@ export default function Training() {
       return
     }
 
+    if (handMode === 'right' && !readings.derecho) {
+      setError('Esta seña es solo de la mano derecha: conecta el guante KLAPS-D.')
+      return
+    }
+    if (handMode === 'left' && !readings.izquierdo) {
+      setError('Esta seña es solo de la mano izquierda: conecta el guante KLAPS-U.')
+      return
+    }
+    if (handMode === 'both' && !(readings.derecho && readings.izquierdo)) {
+      setError('Una seña bimanual necesita los dos guantes enviando datos.')
+      return
+    }
+
     setError('')
     setMessage('')
     setCapturing(true)
     setCaptureProgress(0)
 
     const captured = []
-    for (let index = 0; index < SAMPLES_PER_SIGN; index += 1) {
+    for (let index = 0; index < total; index += 1) {
       captured.push({ vector: vectorRef.current, at: Date.now() })
       setCaptureProgress(index + 1)
       await wait(SAMPLE_INTERVAL_MS)
     }
 
-    const next = saveTraining(withSamples(training, name, captured))
+    let stored = captured
+
+    if (gestureType === 'dynamic') {
+      const trajectory = trajectoryFromFrames(captured.map((sample) => sample.vector))
+
+      if (!trajectory) {
+        setCapturing(false)
+        setCaptureProgress(0)
+        setError(
+          'No se detectó movimiento en la captura. Repite el gesto completo dentro de los 2 segundos de la ventana.',
+        )
+        return
+      }
+
+      stored = [{ vector: trajectory, at: Date.now() }]
+    }
+
+    const next = saveTraining(withSamples(training, name, stored, { handMode, gestureType }))
     setTraining(next)
     setCapturing(false)
+    setCaptureProgress(0)
     setLabel('')
-    setMessage(`«${name}» guardada con ${captured.length} muestras.`)
+    setMessage(
+      gestureType === 'dynamic'
+        ? `«${name}» guardada como dinámica: 1 recorrido de ${captured.length} fotogramas resumido en 10 pasos. Repite la captura para sumar repeticiones y mejorar el acierto.`
+        : `«${name}» guardada: ${stored.length} muestras de ${HAND_MODE_LABELS[handMode].toLowerCase()}.`,
+    )
   }
 
   const removeSign = (id) => {
@@ -321,8 +384,46 @@ export default function Training() {
           Grabar nueva seña
         </h2>
         <p className="mt-1 text-sm text-ink-soft">
-          Escribe la palabra o frase, pon las manos en la postura y captura {SAMPLES_PER_SIGN}{' '}
-          muestras seguidas (1 segundo a 20 Hz).
+          Elige qué mano y qué tipo de seña vas a grabar. Estáticas: postura fija de 1 s (
+          {STATIC_SAMPLES} fotogramas). Dinámicas: recorrido completo de 2 s ({DYNAMIC_SAMPLES}{' '}
+          fotogramas) resumido en 10 pasos clave.
+        </p>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <SegmentedControl
+            label="Mano de la seña"
+            description="Solo derecha (ESP32-D), solo izquierda (ESP32-U) o ambas manos."
+            options={[
+              { value: 'right', label: 'Derecha' },
+              { value: 'left', label: 'Izquierda' },
+              { value: 'both', label: 'Ambas' },
+            ]}
+            value={handMode}
+            onChange={setHandMode}
+          />
+
+          <SegmentedControl
+            label="Tipo de seña"
+            description={
+              gestureType === 'dynamic'
+                ? `Con movimiento: ${DYNAMIC_SAMPLES} fotogramas en 2 s → 10 pasos clave.`
+                : `Postura fija: ${STATIC_SAMPLES} fotogramas en 1 s.`
+            }
+            options={[
+              { value: 'static', label: 'Estática' },
+              { value: 'dynamic', label: 'Dinámica' },
+            ]}
+            value={gestureType}
+            onChange={setGestureType}
+          />
+        </div>
+
+        <p className="mt-3 rounded-md bg-brand-50 px-3 py-2 text-xs text-ink-soft">
+          {handMode === 'both'
+            ? 'Se comparan las 22 dimensiones: 11 del guante derecho (KLAPS-D) y 11 del izquierdo (KLAPS-U).'
+            : `Se comparan solo las 11 dimensiones del guante ${handMode === 'right' ? 'derecho (KLAPS-D)' : 'izquierdo (KLAPS-U)'}; el otro guante se ignora aunque se mueva.`}
+          {gestureType === 'dynamic' &&
+            ' El gesto puede empezar en cualquier momento de la ventana: la app recorta el silencio de los extremos antes de comparar.'}
         </p>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
@@ -340,16 +441,16 @@ export default function Training() {
             />
           </div>
           <Button icon={capturing ? undefined : Play} onClick={capture} disabled={capturing || !hasReadings}>
-            {capturing ? `Capturando ${captureProgress}/${SAMPLES_PER_SIGN}…` : 'Capturar muestras'}
+            {capturing ? `Capturando ${captureProgress}/${total}…` : 'Capturar seña'}
           </Button>
         </div>
 
         {capturing && (
           <ProgressBar
             className="mt-4"
-            value={(captureProgress / SAMPLES_PER_SIGN) * 100}
+            value={(captureProgress / total) * 100}
             label="Captura"
-            valueLabel={`${captureProgress} de ${SAMPLES_PER_SIGN}`}
+            valueLabel={`${captureProgress} de ${total}`}
             tone="success"
             size="sm"
           />
@@ -363,7 +464,7 @@ export default function Training() {
         <SectionTitle
           id="senas-titulo"
           title="Señas guardadas"
-          description={`${signs.length} señas · ${totalSamples(training)} muestras en este navegador`}
+          description={`${signs.length} señas (${summary.static} estáticas, ${summary.dynamic} dinámicas) · ${totalSamples(training)} muestras en este navegador`}
           action={
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="secondary" icon={Download} onClick={download} disabled={signs.length === 0}>
@@ -395,8 +496,25 @@ export default function Training() {
                   <Card padding="sm" className="flex flex-wrap items-center justify-between gap-2">
                     <div className="min-w-0">
                       <p className="font-display font-bold text-brand-800">{sign.label}</p>
-                      <p className="text-xs text-ink-soft">
-                        {sign.samples.length} muestras · {formatRelativeTime(sign.createdAt)}
+                      <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+                        <span className="rounded-full bg-brand-50 px-2 py-0.5 font-semibold text-brand-700">
+                          {HAND_MODE_LABELS[sign.handMode] ?? HAND_MODE_LABELS.both}
+                        </span>
+                        <span
+                          className={
+                            sign.gestureType === 'dynamic'
+                              ? 'rounded-full bg-lavender px-2 py-0.5 font-semibold text-brand-800'
+                              : 'rounded-full bg-mint px-2 py-0.5 font-semibold text-success'
+                          }
+                        >
+                          {GESTURE_TYPE_LABELS[sign.gestureType] ?? GESTURE_TYPE_LABELS.static}
+                        </span>
+                        <span className="text-ink-soft">
+                          {sign.gestureType === 'dynamic'
+                            ? `${sign.samples.length} ${sign.samples.length === 1 ? 'recorrido' : 'recorridos'}`
+                            : `${sign.samples.length} muestras`}{' '}
+                          · {formatRelativeTime(sign.createdAt)}
+                        </span>
                       </p>
                     </div>
                     <Button
@@ -422,8 +540,9 @@ export default function Training() {
           Probar el reconocimiento
         </h2>
         <p className="mt-1 text-sm text-ink-soft">
-          Clasificación KNN con K = 3, umbral {Math.round(CONFIDENCE_THRESHOLD * 100)} % y 0,6 s de
-          estabilización. Las mismas reglas que usa la pantalla de traducción.
+          Clasificación KNN con K = 3 y umbral {Math.round(CONFIDENCE_THRESHOLD * 100)} %. Las
+          estáticas exigen 0,6 s de estabilidad; las dinámicas se disparan al completar el recorrido,
+          sin esperar a que la mano se quede quieta. Las mismas reglas que usa la traducción.
         </p>
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -441,7 +560,11 @@ export default function Training() {
               <>
                 <strong className="font-semibold text-ink">{live.label}</strong> ·{' '}
                 {Math.round(live.confidence * 100)} % ·{' '}
-                {Math.round((live.progress ?? 0) * 100)} % de estabilización
+                {live.mode === 'dynamic'
+                  ? live.stable
+                    ? 'recorrido confirmado'
+                    : 'confirmando recorrido'
+                  : `${Math.round((live.progress ?? 0) * 100)} % de estabilización`}
               </>
             ) : (
               'Sin candidata'
@@ -449,11 +572,25 @@ export default function Training() {
           </div>
         </div>
 
+        {skippedSigns.length > 0 && (
+          <p className="mt-3 rounded-md bg-warning-soft px-3 py-2 text-xs font-medium text-warning">
+            {skippedSigns.length}{' '}
+            {skippedSigns.length === 1 ? 'seña no se evalúa' : 'señas no se evalúan'} porque falta el
+            guante de su modo:{' '}
+            {skippedSigns
+              .slice(0, 4)
+              .map((sign) => `${sign.label} (${(HAND_MODE_LABELS[sign.handMode] ?? '').toLowerCase()})`)
+              .join(', ')}
+            {skippedSigns.length > 4 ? '…' : ''}
+          </p>
+        )}
+
         {lastTest && (
           <p className="mt-3 rounded-md bg-brand-50 px-3 py-2 text-sm text-ink">
             Reconocido: <strong className="font-semibold">{lastTest.label}</strong> ·{' '}
-            {Math.round(lastTest.confidence * 100)} % · distancia {lastTest.distance.toFixed(2)} ·{' '}
-            {lastTest.votes}/3 vecinos
+            {Math.round(lastTest.confidence * 100)} % · distancia{' '}
+            {lastTest.distance.toFixed(2)} · {lastTest.votes}/3 vecinos ·{' '}
+            {GESTURE_TYPE_LABELS[lastTest.mode] ?? GESTURE_TYPE_LABELS.static}
           </p>
         )}
 
