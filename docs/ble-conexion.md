@@ -219,13 +219,28 @@ interna de Chrome, sin relación con KLAPS:
 5. **Nombre distinto al filtro.** Una placa llamada `KLAPS-D`, `GuanteU` o `MiESP` no coincide con
    el prefijo `ESP32`. Usa la opción sin filtro.
 
+### Formatos de UUID aceptados
+
+La app normaliza lo que pegues, así que vale cualquiera de estas formas:
+
+| Pegas | Se guarda como |
+| --- | --- |
+| `6E400001-B5A3-F393-E0A9-E50E24DCCA9E` | `6e400001-b5a3-f393-e0a9-e50e24dcca9e` |
+| `6e400001b5a3f393e0a9e50e24dcca9e` (sin guiones) | `6e400001-b5a3-f393-e0a9-e50e24dcca9e` |
+| `0x180F` | `180f` |
+| `{6e400002-…}` | se quitan las llaves |
+
+Si un campo está mal escrito, el otro **no se borra**: se conserva el valor anterior.
+
 ### Caso C — conecta, pero no aparece ningún servicio
 
 Web Bluetooth solo deja leer servicios **declarados antes de conectar**. Los estándar (batería,
 información del dispositivo) ya están declarados; el servicio propio del guante hay que añadirlo:
 
-- En la pantalla de diagnóstico, tarjeta **«Servicio propio del guante»**: pega el UUID del
-  firmware y pulsa *Guardar UUID*. Se guarda en el navegador y se aplica en la siguiente conexión.
+- En la pantalla de diagnóstico, tarjeta **«UUID del firmware del guante»**: pega los dos UUID y
+  pulsa *Guardar UUID*. Se guardan en el navegador y se aplican en la siguiente conexión.
+- Para comprobarlo sin salir de esa pantalla: **«Probar lectura de sensores» → Escuchar sensores**
+  muestra los flex y el MPU-6050 decodificados de la trama de 34 bytes.
 - O en el código, en `BLE_CONFIG.optionalServices`.
 - Los UUID también se leen en `chrome://bluetooth-internals`: conecta la placa ahí y mira la
   pestaña de servicios y características.

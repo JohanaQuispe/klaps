@@ -86,7 +86,12 @@ export function describeBluetoothError(error) {
  * Abre el selector de dispositivos del navegador.
  * Debe llamarse desde un clic del usuario.
  */
-export async function requestGloveDevice({ namePrefix, acceptAll = false, extraServices = [] } = {}) {
+export async function requestGloveDevice({
+  namePrefix,
+  namePrefixes,
+  acceptAll = false,
+  extraServices = [],
+} = {}) {
   if (!isWebBluetoothAvailable()) {
     throw new Error('Este navegador no admite Web Bluetooth.')
   }
@@ -96,10 +101,11 @@ export async function requestGloveDevice({ namePrefix, acceptAll = false, extraS
    * `extraServices` añade los UUID propios del guante sin tocar el código.
    */
   const optionalServices = [...new Set([...BLE_CONFIG.optionalServices, ...extraServices])]
+  const prefixes = [...new Set([...(namePrefixes ?? []), namePrefix].filter(Boolean))]
   const options =
-    acceptAll || !namePrefix
+    acceptAll || prefixes.length === 0
       ? { acceptAllDevices: true, optionalServices }
-      : { filters: [{ namePrefix }], optionalServices }
+      : { filters: prefixes.map((prefix) => ({ namePrefix: prefix })), optionalServices }
 
   return navigator.bluetooth.requestDevice(options)
 }
