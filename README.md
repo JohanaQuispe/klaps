@@ -61,7 +61,8 @@ src/
 ├── data/               phrases.js (7 categorías y 35 frases)
 ├── pages/              Welcome, Dashboard, Translation, Voice, Phrases, History,
 │                       Emergency, Devices, Settings, ComingSoon, NotFound
-├── services/           bluetooth/mockGuards.js · gesture/demoGestures.js ·
+├── services/           bluetooth/mockGuards.js · bluetooth/bleClient.js ·
+│                       bluetooth/bleConfig.js · gesture/demoGestures.js ·
 │                       speech/recognition.js · emergency/sos.js
 ├── styles/index.css    tokens de marca + accesibilidad
 ├── utils/              cn, format
@@ -82,7 +83,7 @@ src/
 | `/frases` | 7 categorías con iconos 3D, buscador, favoritas y vista en grande |
 | `/historial` | Filtros, escuchar, copiar, favorita y eliminar |
 | `/emergencia` | SOS en dos pasos, contacto, gesto y ubicación con estado honesto del envío |
-| `/dispositivos/diagnostico` | Pendiente: necesita el firmware BLE |
+| `/dispositivos/diagnostico` | Conexión BLE real: descubre servicios, características y notificaciones del ESP32 |
 
 ---
 
@@ -148,3 +149,4 @@ Instrucciones completas en `public/brand/LEEME.md` y `public/illustrations/LEEME
 - `docs/etapa-1-analisis.md` — auditoría del repositorio, de los recursos y decisiones de diseño.
 - `docs/etapa-2-3-entrega.md` — sistema visual y maquetación.
 - `docs/etapa-4-entrega.md` — funcionalidad, pruebas y límites honestos.
+- `docs/ble-conexion.md` — guía para conectar los guantes ESP32-D/ESP32-U por BLE.

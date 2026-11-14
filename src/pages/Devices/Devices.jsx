@@ -19,7 +19,7 @@ export default function Devices() {
       <PageHeader
         eyebrow="Dispositivos"
         title="Guantes inteligentes"
-        description="Cada guante lleva un ESP32, sensores flex y un MPU6050. Aquí ves su estado, batería y señal por separado."
+        description="Cada guante lleva un ESP32, sensores flex y un MPU6050. Aquí ves su estado simulado y puedes probar la conexión real por Bluetooth LE."
         actions={<StatusBadge status="demo" />}
       />
 
@@ -28,8 +28,15 @@ export default function Devices() {
         <div>
           <p className="font-display font-bold text-brand-800">Modo demostración activo</p>
           <p className="mt-1 text-sm text-ink">
-            Los porcentajes de batería, el RSSI y las sincronizaciones son <strong>simulados</strong>.
-            KLAPS todavía no ha establecido una conexión Bluetooth con hardware real.
+            Los porcentajes de batería, el RSSI y las sincronizaciones de estas tarjetas son{' '}
+            <strong>simulados</strong>. Para conectar tu ESP32 de verdad usa el{' '}
+            <Link
+              to="/dispositivos/diagnostico"
+              className="font-semibold text-brand-700 underline underline-offset-2"
+            >
+              diagnóstico por Bluetooth LE
+            </Link>
+            , que abre una conexión real con el navegador.
           </p>
         </div>
       </Card>
@@ -62,8 +69,8 @@ export default function Devices() {
           <div>
             <p className="font-display font-bold text-brand-800">Diagnóstico de sensores</p>
             <p className="mt-0.5 max-w-prose text-sm text-ink-soft">
-              Vista de las lecturas de sensores flex y del MPU6050. Se activará cuando el firmware
-              del guante envíe datos por BLE.
+              Conecta tu ESP32 por Bluetooth LE y descubre qué servicios y características publica:
+              así obtenemos los UUID para leer los sensores flex, el MPU6050 y la batería.
             </p>
           </div>
         </div>
@@ -81,23 +88,33 @@ export default function Devices() {
       <Modal
         open={Boolean(infoGlove)}
         onClose={() => setInfoGlove(null)}
-        title="Conexión Bluetooth en preparación"
+        title="Conectar tu ESP32"
         description={
           infoGlove
-            ? `${infoGlove.label}: la conexión real con el guante todavía no está habilitada.`
+            ? `${infoGlove.label}: abre el diagnóstico para vincular el guante real.`
             : undefined
         }
-        footer={<Button onClick={() => setInfoGlove(null)}>Entendido</Button>}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setInfoGlove(null)} className="sm:mr-auto">
+              Cerrar
+            </Button>
+            <Button as={Link} to="/dispositivos/diagnostico" icon={Bluetooth}>
+              Abrir diagnóstico BLE
+            </Button>
+          </>
+        }
       >
         <div className="space-y-4 text-sm text-ink">
           <p>
-            Para vincular un guante hace falta completar tres piezas que aún están en desarrollo:
+            La conexión real se hace desde el <strong>diagnóstico por Bluetooth LE</strong>, que
+            pide permiso al navegador y muestra lo que publica tu ESP32 (ESP32-D y ESP32-U).
           </p>
           <ul className="space-y-2">
             {[
-              'El servicio BLE del ESP32 con sus UUID de servicio y característica.',
-              'El firmware que publica las lecturas de los sensores flex y del MPU6050.',
-              'La autorización HTTPS del navegador para usar Web Bluetooth.',
+              'El firmware debe usar BLE (GATT), no Bluetooth clásico.',
+              'Necesitas Chrome, Edge u Opera en escritorio, o Chrome en Android.',
+              'La página debe abrirse por HTTPS o en localhost.',
             ].map((item) => (
               <li key={item} className="flex gap-2.5">
                 <Bluetooth className="mt-0.5 size-4 shrink-0 text-brand-600" aria-hidden="true" />
@@ -106,8 +123,8 @@ export default function Devices() {
             ))}
           </ul>
           <p className="rounded-md bg-brand-50 p-3 text-ink-soft">
-            Mientras tanto, los estados de batería y señal que ves son simulados y se muestran con
-            la etiqueta «Modo demostración».
+            Mientras no haya una conexión activa, las tarjetas de esta pantalla siguen mostrando
+            datos simulados con la etiqueta «Modo demostración».
           </p>
         </div>
       </Modal>
