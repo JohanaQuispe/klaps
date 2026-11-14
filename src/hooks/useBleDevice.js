@@ -31,6 +31,9 @@ export function useBleDevice() {
   const [logs, setLogs] = useState([])
   const [error, setError] = useState('')
   const [subscriptions, setSubscriptions] = useState([])
+  // Último paquete recibido por notify: la app lo usa para leer los sensores.
+  const [lastPacket, setLastPacket] = useState(null)
+  const [packetCount, setPacketCount] = useState(0)
 
   const serverRef = useRef(null)
   const unsubscribersRef = useRef([])
@@ -52,6 +55,8 @@ export function useBleDevice() {
     })
     unsubscribersRef.current = []
     setSubscriptions([])
+    setLastPacket(null)
+    setPacketCount(0)
 
     if (deviceRef.current?.gatt?.connected) {
       try {
@@ -70,6 +75,8 @@ export function useBleDevice() {
     setServices([])
     setStandardInfo(null)
     setSubscriptions([])
+    setLastPacket(null)
+    setPacketCount(0)
     unsubscribersRef.current = []
     serverRef.current = null
     pushLog({ label: 'Dispositivo desconectado', hex: '', ascii: '' })
@@ -81,6 +88,8 @@ export function useBleDevice() {
       setLogs([])
       setServices([])
       setStandardInfo(null)
+      setLastPacket(null)
+      setPacketCount(0)
       setStatus('requesting')
 
       let device
@@ -144,6 +153,11 @@ export function useBleDevice() {
           serviceUuid,
           characteristicUuid,
           (value) => {
+            const bytes = new Uint8Array(
+              value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength),
+            )
+            setLastPacket({ bytes, at: Date.now() })
+            setPacketCount((count) => count + 1)
             pushLog({
               label: shortUuid(characteristicUuid),
               hex: toHex(value),
@@ -179,6 +193,8 @@ export function useBleDevice() {
     logs,
     error,
     subscriptions,
+    lastPacket,
+    packetCount,
     connect,
     disconnect,
     subscribe,

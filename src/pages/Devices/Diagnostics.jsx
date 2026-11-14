@@ -9,11 +9,12 @@ import SectionTitle from '../../components/common/SectionTitle'
 import { useBleDevice } from '../../hooks/useBleDevice.js'
 import { useClipboard } from '../../hooks/useClipboard.js'
 import { BLE_CONFIG, BLE_GLOVES } from '../../services/bluetooth/bleConfig.js'
+import { describeBluetoothBlockReason, shortUuid } from '../../services/bluetooth/bleClient.js'
 import {
-  describeBluetoothBlockReason,
   isValidUuid,
-  shortUuid,
-} from '../../services/bluetooth/bleClient.js'
+  loadUuidSettings,
+  saveUuidSettings,
+} from '../../services/bluetooth/uuidSettings.js'
 import { cn } from '../../utils/cn'
 
 const STATUS_LABEL = {
@@ -32,9 +33,6 @@ const GLOVE_OPTIONS = [
   { value: 'izquierdo', label: `${BLE_GLOVES.izquierdo.label} · ${BLE_GLOVES.izquierdo.board}` },
 ]
 
-/** UUID del servicio propio que el usuario conoce por su firmware. */
-const EXTRA_SERVICE_KEY = 'klaps.ble.serviceUuid'
-
 /** Comprobaciones cuando la placa no aparece en el selector del navegador. */
 const NOT_LISTED_CHECKS = [
   'El firmware debe anunciarse por BLE (GATT). Si usa Bluetooth clásico —BluetoothSerial, SPP— el navegador no puede verlo: hay que recompilarlo con BLE.',
@@ -48,11 +46,9 @@ export default function Diagnostics() {
   const ble = useBleDevice()
   const { copy, copied, error: copyError } = useClipboard()
   const [target, setTarget] = useState('cualquiera')
-  const [extraService, setExtraService] = useState('')
-  const [savedUuid, setSavedUuid] = useState(() => {
-    if (typeof window === 'undefined') return ''
-    return window.localStorage.getItem(EXTRA_SERVICE_KEY) ?? ''
-  })
+  const [savedUuids, setSavedUuids] = useState(loadUuidSettings)
+  const [serviceInput, setServiceInput] = useState(savedUuids.service)
+  const [sensorsInput, setSensorsInput] = useState(savedUuids.sensors)
 
   const bluetoothNotice = describeBluetoothBlockReason(
     ble.blockReason,
@@ -62,7 +58,7 @@ export default function Diagnostics() {
   const busy = ble.status === 'requesting' || ble.status === 'connecting'
   const statusInfo = STATUS_LABEL[ble.status] ?? STATUS_LABEL.idle
 
-  const extraServices = savedUuid ? [savedUuid] : []
+  const extraServices = savedUuids.service ? [savedUuids.service] : []
 
   const handleConnect = () => {
     // Sin filtro: aparece cualquier dispositivo BLE, se llame como se llame.
@@ -81,17 +77,18 @@ export default function Diagnostics() {
     ble.connect({ namePrefix: BLE_GLOVES[target].namePrefix, extraServices })
   }
 
-  const saveUuid = () => {
-    const uuid = extraService.trim().toLowerCase()
-    if (!isValidUuid(uuid)) return
-    window.localStorage.setItem(EXTRA_SERVICE_KEY, uuid)
-    setSavedUuid(uuid)
-    setExtraService('')
+  const saveUuids = () => {
+    const next = saveUuidSettings({ service: serviceInput, sensors: sensorsInput })
+    setSavedUuids(next)
+    setServiceInput(next.service)
+    setSensorsInput(next.sensors)
   }
 
-  const clearUuid = () => {
-    window.localStorage.removeItem(EXTRA_SERVICE_KEY)
-    setSavedUuid('')
+  const clearUuids = () => {
+    const next = saveUuidSettings({ service: '', sensors: '' })
+    setSavedUuids(next)
+    setServiceInput('')
+    setSensorsInput('')
   }
 
   const uuidSummary = ble.services
@@ -233,11 +230,11 @@ export default function Diagnostics() {
         </h2>
         <p className="mt-1 text-sm text-ink-soft">
           Web Bluetooth solo puede explorar los servicios que se declaran al conectar. Pega el UUID
-          del servicio de tu firmware para que aparezca en el diagnóstico y puedas copiar sus
-          características. Se guarda en este navegador.
+          del servicio y el de la característica de sensores de tu firmware: se guardan en este
+          navegador y los usa el resto de la app para decodificar la trama de 34 bytes.
         </p>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <div>
             <label htmlFor="uuid-servicio" className="text-sm font-semibold text-ink">
               UUID del servicio
@@ -245,36 +242,52 @@ export default function Diagnostics() {
             <input
               id="uuid-servicio"
               type="text"
-              inputMode="text"
               autoComplete="off"
               spellCheck="false"
-              value={extraService}
-              onChange={(event) => setExtraService(event.target.value)}
+              value={serviceInput}
+              onChange={(event) => setServiceInput(event.target.value)}
               placeholder="0000abcd-0000-1000-8000-00805f9b34fb"
               className="mt-1 min-h-12 w-full rounded-md border border-brand-200 bg-white px-3 font-mono text-sm text-ink"
             />
-            {extraService && !isValidUuid(extraService) && (
-              <p className="mt-1 text-xs font-semibold text-danger">
-                Debe ser un UUID de 16 bits (4 caracteres) o de 128 bits (8-4-4-4-12).
-              </p>
+            {serviceInput && !isValidUuid(serviceInput) && (
+              <p className="mt-1 text-xs font-semibold text-danger">UUID no válido (4 caracteres u 8-4-4-4-12).</p>
             )}
           </div>
 
-          <div className="flex gap-2">
-            <Button onClick={saveUuid} disabled={!isValidUuid(extraService)}>
-              Guardar UUID
-            </Button>
-            {savedUuid && (
-              <Button variant="secondary" onClick={clearUuid}>
-                Quitar
-              </Button>
+          <div>
+            <label htmlFor="uuid-sensores" className="text-sm font-semibold text-ink">
+              UUID de la característica de sensores
+            </label>
+            <input
+              id="uuid-sensores"
+              type="text"
+              autoComplete="off"
+              spellCheck="false"
+              value={sensorsInput}
+              onChange={(event) => setSensorsInput(event.target.value)}
+              placeholder="0000abce-0000-1000-8000-00805f9b34fb"
+              className="mt-1 min-h-12 w-full rounded-md border border-brand-200 bg-white px-3 font-mono text-sm text-ink"
+            />
+            {sensorsInput && !isValidUuid(sensorsInput) && (
+              <p className="mt-1 text-xs font-semibold text-danger">UUID no válido (4 caracteres u 8-4-4-4-12).</p>
             )}
           </div>
         </div>
 
-        {savedUuid && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button onClick={saveUuids} disabled={!isValidUuid(serviceInput) || !isValidUuid(sensorsInput)}>
+            Guardar UUID
+          </Button>
+          {(savedUuids.service || savedUuids.sensors) && (
+            <Button variant="secondary" onClick={clearUuids}>
+              Quitar
+            </Button>
+          )}
+        </div>
+
+        {(savedUuids.service || savedUuids.sensors) && (
           <p className="mt-3 rounded-md bg-brand-50 px-3 py-2 font-mono text-xs font-semibold break-all text-brand-800">
-            Se buscará el servicio {savedUuid} en la próxima conexión.
+            Servicio {savedUuids.service || '—'} · sensores {savedUuids.sensors || '—'}
           </p>
         )}
       </Card>
