@@ -86,6 +86,34 @@ export function buildFeatureVector({ derecho, izquierdo } = {}) {
   return [...gloveVector(derecho), ...gloveVector(izquierdo)]
 }
 
+/** Trama en hexadecimal, agrupada para poder leerla a simple vista. */
+export function frameToHex(bytes) {
+  if (!bytes) return ''
+  return Array.from(bytes)
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join(' ')
+}
+
+/**
+ * Diagnóstico rápido del contenido de una trama ya decodificada.
+ * Devuelve un aviso cuando los flex llegan todos a cero (el firmware los
+ * envía vacíos) o cuando el tamaño no es el esperado.
+ */
+export function describeFrameContent(frame, byteLength = 0) {
+  if (!frame) {
+    if (byteLength > 0 && byteLength !== FRAME_LENGTH) {
+      return `Trama de ${byteLength} bytes; se esperaban ${FRAME_LENGTH}.`
+    }
+    return ''
+  }
+
+  if (frame.flex.every((value) => value === 0)) {
+    return 'Los cinco sensores flex llegan a 0. El IMU sí trae datos, así que la trama está bien alineada: el firmware está enviando ceros en los bytes 0-9.'
+  }
+
+  return ''
+}
+
 /** ¿Hay al menos un guante enviando datos válidos? */
 export function hasAnyReading({ derecho, izquierdo } = {}) {
   return Boolean(derecho || izquierdo)

@@ -112,6 +112,7 @@ al conectar cada guante.
 | «Escuchando · N tramas» | Suscripción activa y paquetes entrantes |
 | «Recibiendo la trama de 34 bytes» | El tamaño coincide con el protocolo |
 | «Trama de N bytes; se esperaban 34» | El firmware envía otra estructura: revisa el orden y los tipos |
+| «Los cinco sensores flex llegan a 0» | La trama está alineada, pero el firmware envía ceros en los bytes 0-9 |
 | «Sin suscribir» | Falta configurar UUID o la suscripción falló (se indica el motivo) |
 
 ## 10. Cómo probarlo

@@ -11,7 +11,11 @@ import { useBleDevice } from '../../hooks/useBleDevice.js'
 import { useClipboard } from '../../hooks/useClipboard.js'
 import { BLE_CONFIG, BLE_GLOVES } from '../../services/bluetooth/bleConfig.js'
 import { describeBluetoothBlockReason, shortUuid } from '../../services/bluetooth/bleClient.js'
-import { parseFrame } from '../../services/bluetooth/sensorFrame.js'
+import {
+  describeFrameContent,
+  frameToHex,
+  parseFrame,
+} from '../../services/bluetooth/sensorFrame.js'
 import ProgressBar from '../../components/common/ProgressBar'
 import {
   isValidUuid,
@@ -57,6 +61,11 @@ export default function Diagnostics() {
   const frame = useMemo(
     () => parseFrame(ble.lastPacket?.bytes ?? null, ble.lastPacket?.at),
     [ble.lastPacket],
+  )
+
+  const frameNotice = useMemo(
+    () => describeFrameContent(frame, ble.lastPacket?.bytes?.length ?? 0),
+    [frame, ble.lastPacket],
   )
 
   const bluetoothNotice = describeBluetoothBlockReason(
@@ -360,6 +369,12 @@ export default function Diagnostics() {
 
         {frame ? (
           <div className="mt-4 rounded-md bg-brand-50 p-4">
+            {frameNotice && (
+              <p className="mb-3 rounded-md bg-danger-soft px-3 py-2 text-xs font-semibold text-danger">
+                {frameNotice}
+              </p>
+            )}
+
             <p className="text-sm font-semibold text-brand-800">Flex (0-100 %)</p>
             <ul className="mt-2 space-y-1.5">
               {frame.flex.map((value, index) => (
@@ -376,6 +391,27 @@ export default function Diagnostics() {
               ax {frame.imu.ax.toFixed(2)} · ay {frame.imu.ay.toFixed(2)} · az {frame.imu.az.toFixed(2)} ·
               gx {frame.imu.gx.toFixed(2)} · gy {frame.imu.gy.toFixed(2)} · gz {frame.imu.gz.toFixed(2)}
             </p>
+
+            {ble.lastPacket?.bytes && (
+              <div className="mt-3 space-y-1 border-t border-brand-200 pt-3">
+                <p className="text-xs font-semibold text-ink-soft">
+                  Última trama en hexadecimal · {ble.lastPacket.bytes.length} bytes
+                </p>
+                <p className="font-mono text-[0.68rem] leading-relaxed break-all text-ink">
+                  <span className="text-brand-700">
+                    flex (bytes 0-9): {frameToHex(ble.lastPacket.bytes.slice(0, 10))}
+                  </span>
+                  <br />
+                  <span className="text-ink-soft">
+                    imu (bytes 10-33): {frameToHex(ble.lastPacket.bytes.slice(10))}
+                  </span>
+                </p>
+                <p className="text-[0.68rem] text-ink-soft">
+                  Copia estas dos líneas si necesitas ayuda: dicen exactamente qué está enviando el
+                  firmware.
+                </p>
+              </div>
+            )}
           </div>
         ) : (
           <p className="mt-4 rounded-md border border-dashed border-brand-200 px-4 py-3 text-sm text-ink-soft">
