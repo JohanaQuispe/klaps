@@ -35,13 +35,21 @@ el mismo clasificador sirve en modo unimanual.
 1. Distancia euclidiana contra **todas** las muestras guardadas.
 2. Se toman los 3 vecinos más cercanos.
 3. Voto ponderado por cercanía (`1 / (distancia + ε)`): un vecino próximo pesa más.
-4. Confianza = peso del ganador × unanimidad (3/3 sube, 1/3 baja).
+4. Confianza = peso del ganador × unanimidad × **similitud absoluta**.
+
+La similitud absoluta (`similarityFromDistance`) evita el falso positivo clásico del KNN: con una
+sola muestra por seña, el reparto de votos daría 100 % aunque la postura no se pareciera en nada.
+Se calcula como `1 − distancia / escala` con escala 50 (estáticas) y 70 (dinámicas).
 
 | Situación | Confianza | ¿Se acepta? |
 | --- | --- | --- |
 | 3 vecinos de la misma seña, muy cerca | ≈ 1,00 | Sí |
 | 2 de 3 vecinos | ≈ 0,67 | No (umbral 0,75) |
+| Vecino único pero a distancia grande | baja | No |
 | Sin muestras o vector vacío | — | No |
+
+Desde la etapa 7 cada seña lleva **modo de mano** (`right`, `left`, `both`) y **tipo**
+(`static`, `dynamic`): ver `docs/etapa-7-senas-dinamicas.md`.
 
 ## 4. Estabilización (anti-rebote)
 
@@ -50,8 +58,10 @@ el mismo clasificador sirve en modo unimanual.
 1. Clasifica cada lectura.
 2. Si la confianza < **75 %**, se descarta y se reinicia el candidato.
 3. Si la etiqueta cambia, se reinicia el cronómetro.
-4. Solo se emite cuando la **misma seña se mantiene ≥ 600 ms**.
-5. Tras emitir, hay un **enfriamiento de 1,5 s** para no repetir la palabra mientras la mano sigue
+4. Solo se emite cuando la **misma seña se mantiene ≥ 600 ms** (señas estáticas).
+5. Las **señas dinámicas** no esperan quietud: se emiten al completar el recorrido con ≥ 75 % de
+   similitud (confirmación de 100 ms). Ver `docs/etapa-7-senas-dinamicas.md`.
+6. Tras emitir, hay un **enfriamiento de 1,5 s** para no repetir la palabra mientras la mano sigue
    en la misma postura.
 
 La pantalla de traducción muestra en vivo la candidata, su confianza y una barra con el progreso
@@ -62,10 +72,13 @@ de los 600 ms, para que el usuario entienda por qué una seña «todavía no sal
 En `/entrenamiento`:
 
 1. Escribes el nombre («Hola», «Gracias», «SOS»…).
-2. Pulsas **Capturar muestras**: se toman **20 lecturas seguidas a 20 Hz** (1 segundo).
-3. Se guardan en `localStorage` (`klaps.training.v1`) junto a la etiqueta y la fecha.
+2. Eliges **mano** (derecha, izquierda o ambas) y **tipo** (estática o dinámica).
+3. Pulsas **Capturar seña**: 20 lecturas a 20 Hz para estáticas (1 s) o 40 para dinámicas (2 s).
+4. Se guardan en `localStorage` (`klaps.training.v1`) junto a la etiqueta, la mano, el tipo y la
+   fecha.
 
-Si repites el nombre, las muestras se **suman** a la seña existente (así se mejora con el uso).
+Si repites nombre + mano + tipo, las muestras se **suman** a la seña existente (así se mejora con
+el uso). La misma etiqueta con otro modo o tipo crea una seña distinta.
 
 ## 6. Exportar e importar
 

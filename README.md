@@ -139,7 +139,8 @@ para que el ajuste de tamaño del usuario escale toda la interfaz (100 %, 112,5 
 - La batería se muestra si el firmware publica el servicio estándar `0x180F`; el RSSI no se puede
   leer desde Web Bluetooth y aparece como «No disponible».
 - La trama de 34 bytes (5 flex + 6 del MPU-6050) se decodifica en `sensorFrame.js` y alimenta el
-  clasificador KNN de 22 dimensiones (`docs/etapa-6-reconocimiento.md`). Los UUID se configuran
+  clasificador KNN de 22 dimensiones (`docs/etapa-6-reconocimiento.md`) con señas estáticas y
+  dinámicas y modo por mano (`docs/etapa-7-senas-dinamicas.md`). Los UUID se configuran
   desde la app y se guardan en el navegador.
 - SOS y demás módulos pendientes no simulan haber enviado nada: muestran su estado real.
 
@@ -165,6 +166,7 @@ Instrucciones completas en `public/brand/LEEME.md` y `public/illustrations/LEEME
 - `docs/etapa-4-entrega.md` — funcionalidad, pruebas y límites honestos.
 - `docs/etapa-5-modo-real.md` — retirada del modo demostración y conexión BLE real.
 - `docs/etapa-6-reconocimiento.md` — trama de 34 bytes, vector de 22 dimensiones, KNN, entrenamiento y SOS.
+- `docs/etapa-7-senas-dinamicas.md` — señas estáticas/dinámicas, modo de mano y ventana deslizante.
 - `docs/ble-conexion.md` — guía para conectar los guantes ESP32-D/ESP32-U por BLE.
 - `docs/como-ejecutar.md` — arrancar la app, comprobar el build y resolver fallos comunes.
 - `docs/firmware/prueba-ble/prueba-ble.ino` — sketch de prueba que anuncia `KLAPS-TEST` para validar la radio BLE.

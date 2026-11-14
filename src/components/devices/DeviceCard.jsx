@@ -4,7 +4,7 @@ import { Activity, Clock, Hand, Power, RefreshCw, SlidersHorizontal } from 'luci
 import Button from '../common/Button'
 import StatusBadge from '../common/StatusBadge'
 import ProgressBar from '../common/ProgressBar'
-import { batteryState, signalState, GLOVE_STATUS } from '../../services/bluetooth/gloveState.js'
+import { batteryState, GLOVE_STATUS } from '../../services/bluetooth/gloveState.js'
 import { formatBattery, formatRelativeTime } from '../../utils/format.js'
 import { cn } from '../../utils/cn'
 
@@ -32,23 +32,6 @@ function GloveThumb({ glove }) {
   )
 }
 
-function SignalBars({ bars }) {
-  return (
-    <span className="flex items-end gap-[3px]" aria-hidden="true">
-      {[1, 2, 3, 4].map((level) => (
-        <span
-          key={level}
-          className={cn(
-            'w-1.5 rounded-sm transition-colors',
-            level <= bars ? 'bg-success' : 'bg-brand-100',
-          )}
-          style={{ height: `${4 + level * 3}px` }}
-        />
-      ))}
-    </span>
-  )
-}
-
 /** Tarjeta completa de un guante (pantalla Dispositivos). Solo datos reales. */
 export default function DeviceCard({
   glove,
@@ -59,7 +42,6 @@ export default function DeviceCard({
   sensorsConfigured = false,
 }) {
   const battery = batteryState(glove.battery)
-  const signal = signalState(glove.rssi)
   const isConnected = glove.status === GLOVE_STATUS.CONECTADO
   const isConnecting = glove.status === GLOVE_STATUS.CONECTANDO
   const hasBattery = typeof glove.battery === 'number'
@@ -102,19 +84,6 @@ export default function DeviceCard({
             <span className="text-sm font-semibold text-ink">{battery.label}</span>
           </div>
         )}
-
-        <div className="rounded-md bg-brand-50 px-3.5 py-3">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm font-medium text-ink-soft">Señal (RSSI)</span>
-            <span className="flex items-center gap-2 text-sm font-semibold text-ink">
-              <SignalBars bars={signal.bars} />
-              <span>{signal.label}</span>
-            </span>
-          </div>
-          <p className="mt-1 text-[0.7rem] leading-snug text-ink-soft">
-            Web Bluetooth no expone la intensidad de señal de un dispositivo conectado.
-          </p>
-        </div>
 
         {isConnected && (
           <div className="rounded-md border border-brand-100 px-3.5 py-3">
@@ -211,7 +180,6 @@ export default function DeviceCard({
 
 /** Fila compacta de un guante (resumen del Panel). */
 export function DeviceRow({ glove }) {
-  const signal = signalState(glove.rssi)
   const hasBattery = typeof glove.battery === 'number'
 
   return (
@@ -231,7 +199,7 @@ export function DeviceRow({ glove }) {
         <div className="min-w-0">
           <p className="truncate font-display text-sm font-bold text-brand-800">{glove.label}</p>
           <p className="text-xs text-ink-soft">
-            {hasBattery ? formatBattery(glove.battery) : 'Sin lectura'} · {signal.label}
+            {hasBattery ? formatBattery(glove.battery) : 'Sin lectura'}
           </p>
         </div>
       </div>
