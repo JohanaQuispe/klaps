@@ -9,10 +9,19 @@ import StatusBadge from '../../components/common/StatusBadge'
 import ErrorMessage from '../../components/common/ErrorMessage'
 import DeviceCard from '../../components/devices/DeviceCard'
 import { useDevices } from '../../context/deviceContext.js'
+import {
+  describeBluetoothBlockReason,
+  getBluetoothBlockReason,
+} from '../../services/bluetooth/bleClient.js'
 
 export default function Devices() {
-  const { gloves, mode, bluetoothSupported, disconnect, reconnect } = useDevices()
+  const { gloves, mode, disconnect, reconnect } = useDevices()
   const [infoGlove, setInfoGlove] = useState(null)
+  const blockReason = getBluetoothBlockReason()
+  const bluetoothNotice = describeBluetoothBlockReason(
+    blockReason,
+    typeof window !== 'undefined' ? window.location.host : '',
+  )
 
   return (
     <div>
@@ -41,11 +50,11 @@ export default function Devices() {
         </div>
       </Card>
 
-      {!bluetoothSupported && (
+      {bluetoothNotice && (
         <ErrorMessage
           className="mb-5"
-          title="Web Bluetooth no está disponible en este navegador"
-          description="Podrás ver los guantes en modo demostración, pero para conectarlos necesitarás Chrome o Edge en un contexto seguro (HTTPS o localhost)."
+          title={bluetoothNotice.title}
+          description={bluetoothNotice.description}
         />
       )}
 

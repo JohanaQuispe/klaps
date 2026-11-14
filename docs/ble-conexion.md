@@ -22,6 +22,67 @@ real hasta que exista el protocolo (UUID + formato), para no inventar lecturas.
 | Contexto seguro | HTTPS o `localhost`. La vista previa de Arena ya es HTTPS. |
 | Permiso | El usuario elige el dispositivo en cada conexión; no hay escaneo silencioso. |
 
+## 2.1 Cómo conseguir el «contexto seguro»
+
+El navegador solo expone Web Bluetooth en `https://` o en `localhost`. Si abres la app por
+`http://192.168.x.x` o `http://10.x.x.x` (la IP de tu equipo en la red), **no habrá Bluetooth**,
+aunque uses Chrome. La pantalla de guantes lo detecta y lo explica con la dirección exacta.
+
+| Caso | Dirección correcta | Qué hace falta |
+| --- | --- | --- |
+| Probar en el **mismo PC** que ejecuta `npm run dev` | `http://localhost:5173` | Nada más. `localhost` cuenta como seguro. Usa el Bluetooth de ese PC. |
+| Probar desde el **móvil** o desde otro equipo | `https://…` | Un certificado válido (ver abajo). Usa el Bluetooth del móvil. |
+
+### Opción A — Túnel HTTPS (la más rápida para el móvil)
+
+En el PC, con el servidor corriendo, en otra terminal:
+
+```powershell
+cloudflared tunnel --url http://localhost:5173
+```
+
+Instalación: `winget install Cloudflare.cloudflared`. Te da una URL `https://algo.trycloudflare.com`:
+ábrela en Chrome del móvil y el botón de Bluetooth funcionará. La URL cambia en cada ejecución y
+necesita internet. El tráfico pasa por Cloudflare, así que úsalo solo con datos de prueba.
+
+### Opción B — Certificado local con mkcert
+
+```powershell
+winget install FiloSottile.mkcert
+mkcert -install
+mkcert 192.168.1.50 localhost
+```
+
+Luego hay que configurar Vite con `https` y ese certificado, e **instalar la CA de mkcert en el
+móvil** (Ajustes → Seguridad → Instalar certificado). Más trabajo, pero la dirección es fija y no
+depende de internet.
+
+### Opción C — Solo escritorio, sin HTTPS
+
+En Chrome de escritorio: `chrome://flags/#unsafely-treat-insecure-origin-as-secure`, añade
+`http://10.68.48.214:5173` y reinicia el navegador. Sirve para desarrollo; no existe en móvil y no
+debe usarse en producción.
+
+### Permisos: qué se pide y qué no
+
+- La **única** autorización es el selector de dispositivos del navegador: eliges tu ESP32 y Chrome
+  recuerda esa autorización.
+- Windows: Bluetooth activo en *Configuración → Bluetooth y dispositivos*.
+- Android: permiso de «Dispositivos cercanos» para Chrome.
+- La app **no** pide ubicación ni escanea en segundo plano.
+
+## 2.2 ¿Y un APK?
+
+Un APK nativo **no** es un simple empaquetado de esta web: el WebView de Android no implementa
+Web Bluetooth, así que la app quedaría sin Bluetooth. Para tener BLE real en un APK haría falta
+añadir código nativo — por ejemplo **Capacitor + `@capacitor-community/bluetooth-le`** o React
+Native BLE —, lo que implica otro conjunto de dependencias, Android Studio y un flujo de compilación
+distinto.
+
+Alternativa intermedia: **instalar la web como aplicación (PWA)** desde Chrome del móvil
+(«Añadir a pantalla de inicio»). Se ve como una app, pero sigue necesitando HTTPS y el navegador
+Chrome para acceder al Bluetooth.
+
 ## 3. Firmware mínimo recomendado (ESP32 Arduino)
 
 Servicio propio + característica con `notify`, y —muy recomendable— el servicio estándar de

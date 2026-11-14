@@ -18,6 +18,56 @@ export function isSecureContext() {
   return window.isSecureContext || window.location.hostname === 'localhost'
 }
 
+/**
+ * Motivo por el que Web Bluetooth no se puede usar en esta página.
+ * Devuelve null cuando todo está en orden.
+ *
+ * - 'insecure-lan'  → abierto por http:// con una IP o dominio de red (no localhost)
+ * - 'insecure'      → el navegador exige HTTPS
+ * - 'unsupported'   → el navegador no implementa Web Bluetooth
+ * - 'ssr'           → no hay window (renderizado en servidor)
+ */
+export function getBluetoothBlockReason() {
+  if (typeof window === 'undefined') return 'ssr'
+
+  if (!isSecureContext()) {
+    const { protocol, hostname } = window.location
+    const isLocal =
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '[::1]' ||
+      hostname.endsWith('.localhost')
+    return protocol === 'http:' && !isLocal ? 'insecure-lan' : 'insecure'
+  }
+
+  return isWebBluetoothAvailable() ? null : 'unsupported'
+}
+
+/** Título y explicación accionable para cada motivo de bloqueo. */
+export function describeBluetoothBlockReason(reason, hostname = '') {
+  const address = hostname || 'esta dirección'
+
+  switch (reason) {
+    case 'insecure-lan':
+      return {
+        title: 'Bluetooth bloqueado: la página no es segura',
+        description: `Estás abriendo ${address}. El navegador solo permite Web Bluetooth en https:// o en localhost. Abre http://localhost:5173 en el equipo donde corre el servidor, o sirve la app por HTTPS para usarla desde el móvil.`,
+      }
+    case 'insecure':
+      return {
+        title: 'Hace falta una conexión segura',
+        description: 'Web Bluetooth solo funciona en HTTPS o en localhost. Abre la aplicación desde esa dirección para poder conectar el guante.',
+      }
+    case 'unsupported':
+      return {
+        title: 'Este navegador no admite Web Bluetooth',
+        description: 'Se necesita Chrome, Edge u Opera en escritorio, o Chrome en Android. Safari (iOS y macOS) y Firefox no lo incluyen.',
+      }
+    default:
+      return null
+  }
+}
+
 /** Traduce los errores del navegador a mensajes comprensibles. */
 export function describeBluetoothError(error) {
   const messages = {

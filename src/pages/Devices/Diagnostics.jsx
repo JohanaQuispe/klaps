@@ -9,7 +9,10 @@ import SectionTitle from '../../components/common/SectionTitle'
 import { useBleDevice } from '../../hooks/useBleDevice.js'
 import { useClipboard } from '../../hooks/useClipboard.js'
 import { BLE_CONFIG, BLE_GLOVES } from '../../services/bluetooth/bleConfig.js'
-import { shortUuid } from '../../services/bluetooth/bleClient.js'
+import {
+  describeBluetoothBlockReason,
+  shortUuid,
+} from '../../services/bluetooth/bleClient.js'
 import { cn } from '../../utils/cn'
 
 const STATUS_LABEL = {
@@ -30,6 +33,11 @@ export default function Diagnostics() {
   const ble = useBleDevice()
   const { copy, copied, error: copyError } = useClipboard()
   const [target, setTarget] = useState('cualquiera')
+
+  const bluetoothNotice = describeBluetoothBlockReason(
+    ble.blockReason,
+    typeof window !== 'undefined' ? window.location.host : '',
+  )
 
   const busy = ble.status === 'requesting' || ble.status === 'connecting'
   const statusInfo = STATUS_LABEL[ble.status] ?? STATUS_LABEL.idle
@@ -70,19 +78,11 @@ export default function Diagnostics() {
         actions={<StatusBadge status={statusInfo.status} label={statusInfo.label} />}
       />
 
-      {!ble.supported && (
+      {bluetoothNotice && (
         <ErrorMessage
           className="mb-5"
-          title="Este navegador no admite Web Bluetooth"
-          description="Se necesita Chrome, Edge u Opera en escritorio, o Chrome en Android. Safari (iOS y macOS) y Firefox no lo incluyen, y además el sitio debe abrirse por HTTPS o en localhost."
-        />
-      )}
-
-      {ble.supported && !ble.secure && (
-        <ErrorMessage
-          className="mb-5"
-          title="Hace falta una conexión segura"
-          description="Web Bluetooth solo funciona en HTTPS o en localhost. Abre la aplicación desde la dirección segura para poder conectar el guante."
+          title={bluetoothNotice.title}
+          description={bluetoothNotice.description}
         />
       )}
 
