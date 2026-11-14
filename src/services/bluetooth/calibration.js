@@ -1,0 +1,230 @@
+/**
+ * Calibración de los guantes en localStorage · `klaps.calibration.v1`
+ *
+ * El firmware envía los flex como porcentaje 0-100 y el MPU-6050 en unidades
+ * físicas. Cada guante, sin embargo, no llega ni a 0 % con la mano abierta ni a
+ * 100 % con el puño cerrado, y el giroscopio puede tener un sesgo distinto de
+ * cero. La calibración guiada mide esos extremos reales y el sesgo del IMU para
+ * reescalar las lecturas sin tocar el código del ESP32.
+ *
+ * Formato:
+ * {
+ *   version: 1,
+ *   createdAt: 1763000000000,
+ *   flex: {
+ *     min: [10 números],   // 0..4 guante derecho, 5..9 guante izquierdo
+ *     max: [10 números],
+ *     valid: [10 booleanos]  // false = ese dedo no cambió lo suficiente
+ *   },
+ *   imu: {
+ *     derecho:   { ax, ay, az, gx, gy, gz },
+ *     izquierdo: { ax, ay, az, gx, gy, gz }
+ *   },
+ *   samples: { stretched, closed, neutral }
+ * }
+ */
+
+export const CALIBRATION_KEY = 'klaps.calibration.v1'
+
+/** Fotogramas por paso: 2 segundos a 20 Hz. */
+export const CALIBRATION_FRAMES = 40
+/** Pausa antes de cada paso para que la persona se coloque. */
+export const CALIBRATION_SETTLE_MS = 900
+/** Diferencia mínima entre mínimo y máximo para dar un dedo por válido. */
+export const MIN_FLEX_SPAN = 5
+
+export const CALIBRATION_STEPS = [
+  {
+    key: 'stretched',
+    title: 'Dedos estirados (0 %)',
+    instruction: 'Abre las dos manos al máximo, con los dedos bien separados, y mantén la postura.',
+    icon: 'open',
+  },
+  {
+    key: 'closed',
+    title: 'Dedos doblados (100 %)',
+    instruction: 'Cierra los dos puños con fuerza y mantén la presión durante la captura.',
+    icon: 'fist',
+  },
+  {
+    key: 'neutral',
+    title: 'Movimiento de referencia',
+    instruction:
+      'Sube las manos, bájalas y déjalas al centro. Así se registra la línea base del MPU-6050.',
+    icon: 'move',
+  },
+]
+
+const EMPTY_OFFSET = { ax: 0, ay: 0, az: 0, gx: 0, gy: 0, gz: 0 }
+const AXES = ['ax', 'ay', 'az', 'gx', 'gy', 'gz']
+
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
+const isFiniteNumber = (value) => typeof value === 'number' && Number.isFinite(value)
+
+/** ¿Hay una calibración utilizable? */
+export function isCalibrationUsable(calibration) {
+  if (!calibration?.flex?.min || !calibration?.flex?.max) return false
+  return calibration.flex.min.length === 10 && calibration.flex.max.length === 10
+}
+
+/** Valida y normaliza lo que venga de localStorage o de la captura. */
+export function normalizeCalibration(raw) {
+  if (!isCalibrationUsable(raw)) return null
+
+  const min = raw.flex.min.map((value) => (isFiniteNumber(value) ? value : 0))
+  const max = raw.flex.max.map((value) => (isFiniteNumber(value) ? value : 100))
+  const valid = min.map((value, index) => {
+    if (Array.isArray(raw.flex.valid) && typeof raw.flex.valid[index] === 'boolean') {
+      return raw.flex.valid[index]
+    }
+    return max[index] - value >= MIN_FLEX_SPAN
+  })
+
+  const offset = (side) => {
+    const source = raw.imu?.[side] ?? {}
+    return AXES.reduce((accumulator, axis) => {
+      accumulator[axis] = isFiniteNumber(source[axis]) ? source[axis] : 0
+      return accumulator
+    }, {})
+  }
+
+  return {
+    version: 1,
+    createdAt: isFiniteNumber(raw.createdAt) ? raw.createdAt : Date.now(),
+    flex: { min, max, valid },
+    imu: { derecho: offset('derecho'), izquierdo: offset('izquierdo') },
+    samples: {
+      stretched: raw.samples?.stretched ?? 0,
+      closed: raw.samples?.closed ?? 0,
+      neutral: raw.samples?.neutral ?? 0,
+    },
+  }
+}
+
+export function loadCalibration() {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(CALIBRATION_KEY)
+    if (!raw) return null
+    return normalizeCalibration(JSON.parse(raw))
+  } catch {
+    return null
+  }
+}
+
+export function saveCalibration(calibration) {
+  const safe = normalizeCalibration(calibration)
+  if (safe && typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(CALIBRATION_KEY, JSON.stringify(safe))
+    } catch {
+      // sin espacio o modo privado: se mantiene solo en memoria
+    }
+  }
+  return safe
+}
+
+export function clearCalibration() {
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.removeItem(CALIBRATION_KEY)
+    } catch {
+      // nada que limpiar
+    }
+  }
+  return null
+}
+
+/** Media de un eje del IMU en una lista de lecturas (ignora lecturas vacías). */
+function averageImu(readings = []) {
+  const valid = readings.filter((reading) => reading?.imu)
+  if (valid.length === 0) return { ...EMPTY_OFFSET }
+
+  return AXES.reduce((accumulator, axis) => {
+    const total = valid.reduce((sum, reading) => {
+      const value = reading.imu[axis]
+      return Number.isFinite(value) ? sum + value : sum
+    }, 0)
+    accumulator[axis] = total / valid.length
+    return accumulator
+  }, {})
+}
+
+/** Diez valores de flex por instantánea: 5 del guante derecho y 5 del izquierdo. */
+function flexSnapshot(snapshot) {
+  const right = snapshot?.derecho?.flex ?? []
+  const left = snapshot?.izquierdo?.flex ?? []
+  return [...Array.from({ length: 5 }, (_, index) => right[index]), ...Array.from({ length: 5 }, (_, index) => left[index])]
+}
+
+/**
+ * Construye la calibración a partir de las tres capturas.
+ * Cada captura es una lista de instantáneas `{ derecho, izquierdo }`.
+ *
+ * Si un dedo no cambia lo suficiente entre «estirado» y «doblado», se marca
+ * como no válido y se deja tal cual: mejor eso que estropear el vector de una
+ * mano entera cuando el firmware todavía no lee los flex.
+ */
+export function buildCalibration({ stretched = [], closed = [], neutral = [] } = {}) {
+  const min = Array.from({ length: 10 }, () => null)
+  const max = Array.from({ length: 10 }, () => null)
+
+  for (const snapshot of stretched) {
+    flexSnapshot(snapshot).forEach((value, index) => {
+      if (!isFiniteNumber(value)) return
+      if (min[index] === null || value < min[index]) min[index] = value
+    })
+  }
+
+  for (const snapshot of closed) {
+    flexSnapshot(snapshot).forEach((value, index) => {
+      if (!isFiniteNumber(value)) return
+      if (max[index] === null || value > max[index]) max[index] = value
+    })
+  }
+
+  const valid = min.map(
+    (low, index) => low !== null && max[index] !== null && max[index] - low >= MIN_FLEX_SPAN,
+  )
+
+  return {
+    version: 1,
+    createdAt: Date.now(),
+    flex: {
+      min: min.map((value, index) => (valid[index] ? clamp(value, 0, 100) : 0)),
+      max: max.map((value, index) => (valid[index] ? clamp(value, 0, 100) : 100)),
+      valid,
+    },
+    imu: {
+      derecho: averageImu(neutral.map((snapshot) => snapshot?.derecho)),
+      izquierdo: averageImu(neutral.map((snapshot) => snapshot?.izquierdo)),
+    },
+    samples: { stretched: stretched.length, closed: closed.length, neutral: neutral.length },
+  }
+}
+
+/** Resumen legible para la interfaz. */
+export function describeCalibration(calibration) {
+  if (!isCalibrationUsable(calibration)) return null
+
+  const ranges = (offset) =>
+    Array.from({ length: 5 }, (_, index) => {
+      const position = offset + index
+      return {
+        finger: index,
+        valid: calibration.flex.valid[position],
+        min: Math.round(calibration.flex.min[position]),
+        max: Math.round(calibration.flex.max[position]),
+      }
+    })
+
+  const validCount = calibration.flex.valid.filter(Boolean).length
+
+  return {
+    createdAt: calibration.createdAt,
+    validCount,
+    derecho: ranges(0),
+    izquierdo: ranges(5),
+    imu: calibration.imu,
+  }
+}

@@ -6,10 +6,12 @@ import {
   Download,
   Hand,
   Play,
+  RotateCcw,
   Save,
   Square,
   Trash2,
   Upload,
+  Wand2,
 } from 'lucide-react'
 import PageHeader from '../../components/layout/PageHeader'
 import Card from '../../components/common/Card'
@@ -22,6 +24,13 @@ import SegmentedControl from '../../components/common/SegmentedControl'
 import { useDevices } from '../../context/deviceContext.js'
 import { useGestureRecognition } from '../../hooks/useGestureRecognition.js'
 import { isValidUuid } from '../../services/bluetooth/uuidSettings.js'
+import {
+  CALIBRATION_FRAMES,
+  CALIBRATION_SETTLE_MS,
+  CALIBRATION_STEPS,
+  buildCalibration,
+  describeCalibration,
+} from '../../services/bluetooth/calibration.js'
 import {
   CONFIDENCE_THRESHOLD,
   DYNAMIC_STEPS,
@@ -66,6 +75,9 @@ export default function Training() {
     protocolConfigured,
     uuidSettings,
     applyUuidSettings,
+    calibration,
+    applyCalibrationSettings,
+    removeCalibration,
     connect,
     disconnect,
   } = useDevices()
@@ -74,6 +86,11 @@ export default function Training() {
   useEffect(() => {
     vectorRef.current = featureVector
   }, [featureVector])
+
+  const readingsRef = useRef(readings)
+  useEffect(() => {
+    readingsRef.current = readings
+  }, [readings])
 
   const [training, setTraining] = useState(loadTraining)
   const [serviceUuid, setServiceUuid] = useState(uuidSettings.service)
@@ -90,9 +107,15 @@ export default function Training() {
   const [testing, setTesting] = useState(false)
   const [lastTest, setLastTest] = useState(null)
 
+  const [calibrating, setCalibrating] = useState(false)
+  const [calibrationStep, setCalibrationStep] = useState(0)
+  const [calibrationProgress, setCalibrationProgress] = useState(0)
+  const [calibrationNotice, setCalibrationNotice] = useState('')
+
   const signs = training.signs
   const samples = flattenSamples(signs)
   const summary = summarizeSigns(signs)
+  const calibrationSummary = useMemo(() => describeCalibration(calibration), [calibration])
   const connected = gloves.filter((glove) => glove.status === 'conectado').length
   const total = samplesForType(gestureType)
 
@@ -195,6 +218,58 @@ export default function Training() {
         ? `«${name}» guardada como dinámica: 1 recorrido de ${captured.length} fotogramas resumido en ${DYNAMIC_STEPS} pasos. Repite la captura para sumar repeticiones y mejorar el acierto.`
         : `«${name}» guardada: ${stored.length} muestras de ${HAND_MODE_LABELS[handMode].toLowerCase()}.`,
     )
+  }
+
+  const runCalibration = async () => {
+    if (!hasReadings) {
+      setError('Conecta los guantes y espera a recibir tramas antes de calibrar.')
+      return
+    }
+
+    setError('')
+    setCalibrationNotice('')
+    setCalibrating(true)
+
+    const snapshots = { stretched: [], closed: [], neutral: [] }
+
+    try {
+      for (let index = 0; index < CALIBRATION_STEPS.length; index += 1) {
+        setCalibrationStep(index)
+        setCalibrationProgress(0)
+        // Pausa para que la persona se coloque antes de medir.
+        await wait(CALIBRATION_SETTLE_MS)
+
+        for (let frame = 0; frame < CALIBRATION_FRAMES; frame += 1) {
+          snapshots[CALIBRATION_STEPS[index].key].push(readingsRef.current ?? {})
+          setCalibrationProgress(frame + 1)
+          await wait(SAMPLE_INTERVAL_MS)
+        }
+      }
+
+      const next = buildCalibration(snapshots)
+      applyCalibrationSettings(next)
+      const valid = next.flex.valid.filter(Boolean).length
+
+      const base =
+        valid === 0
+          ? 'Calibración guardada, pero ningún dedo cambió entre mano abierta y puño cerrado: revisa los sensores flex del firmware.'
+          : `Calibración guardada: ${valid} de 10 dedos con rango real y MPU-6050 centrado con su línea base.`
+
+      setCalibrationNotice(
+        signs.length > 0
+          ? `${base} Ya había señas grabadas: vuelve a grabarlas para que se comparen con las lecturas calibradas.`
+          : base,
+      )
+    } finally {
+      setCalibrating(false)
+      setCalibrationStep(0)
+      setCalibrationProgress(0)
+    }
+  }
+
+  const forgetCalibration = () => {
+    removeCalibration()
+    setCalibrationNotice('Calibración eliminada: las lecturas vuelven a los valores del firmware.')
   }
 
   const removeSign = (id) => {
@@ -335,6 +410,12 @@ export default function Training() {
           Lectura en vivo
         </h2>
 
+        {calibration && (
+          <p className="mt-2 text-xs font-medium text-success">
+            Lecturas calibradas con los extremos medidos en este navegador.
+          </p>
+        )}
+
         {!hasReadings ? (
           <p className="mt-2 text-sm text-ink-soft">
             Sin datos todavía. Conecta un guante y espera a que empiece a enviar tramas. Si aparece
@@ -380,7 +461,129 @@ export default function Training() {
         )}
       </Card>
 
-      {/* 3. Grabar nueva seña */}
+      {/* 3. Calibración guiada */}
+      <Card as="section" aria-labelledby="calibracion-titulo" padding="lg" className="mt-5">
+        <h2
+          id="calibracion-titulo"
+          className="flex items-center gap-2 font-display text-lg font-extrabold text-brand-800"
+        >
+          <Wand2 className="size-5 text-brand-600" aria-hidden="true" />
+          Calibración guiada
+        </h2>
+        <p className="mt-1 text-sm text-ink-soft">
+          Mide los extremos reales de tus dedos y la línea base del MPU-6050 en tres pasos de 2
+          segundos ({CALIBRATION_FRAMES} muestras cada uno). Se guarda en este navegador y se aplica
+          a todas las pantallas, sin tocar el código del ESP32.
+        </p>
+
+        {!calibrating && (
+          <ol className="mt-3 grid gap-1.5 rounded-md bg-brand-50 px-3 py-2.5 text-xs text-ink-soft">
+            {CALIBRATION_STEPS.map((step, index) => (
+              <li key={step.key}>
+                <span className="font-semibold text-brand-800">
+                  Paso {index + 1} · {step.title}
+                </span>{' '}
+                — {step.instruction}
+              </li>
+            ))}
+          </ol>
+        )}
+
+        {calibrating ? (
+          <div className="mt-4" role="status" aria-live="polite">
+            <p className="font-display font-bold text-brand-800">
+              Paso {calibrationStep + 1} de {CALIBRATION_STEPS.length} ·{' '}
+              {CALIBRATION_STEPS[calibrationStep].title}
+            </p>
+            <p className="mt-1 text-sm text-ink">{CALIBRATION_STEPS[calibrationStep].instruction}</p>
+            <ProgressBar
+              className="mt-3"
+              value={(calibrationProgress / CALIBRATION_FRAMES) * 100}
+              label="Captura del paso"
+              valueLabel={`${calibrationProgress} de ${CALIBRATION_FRAMES}`}
+              tone="success"
+              size="sm"
+            />
+            <ol className="mt-3 grid gap-1 text-xs">
+              {CALIBRATION_STEPS.map((step, index) => (
+                <li
+                  key={step.key}
+                  className={
+                    index < calibrationStep
+                      ? 'text-success'
+                      : index === calibrationStep
+                        ? 'font-semibold text-brand-800'
+                        : 'text-ink-soft'
+                  }
+                >
+                  {index + 1}. {step.title}
+                  {' · '}
+                  {index < calibrationStep ? 'hecho' : index === calibrationStep ? 'en curso' : 'pendiente'}
+                </li>
+              ))}
+            </ol>
+          </div>
+        ) : (
+          <>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <Button icon={Wand2} onClick={runCalibration} disabled={!hasReadings}>
+                {calibration ? 'Recalibrar' : 'Iniciar calibración guiada'}
+              </Button>
+              {calibration && (
+                <Button size="sm" variant="ghost" icon={RotateCcw} onClick={forgetCalibration}>
+                  Quitar calibración
+                </Button>
+              )}
+              {calibrationSummary && (
+                <span className="rounded-full bg-mint px-2.5 py-1 text-xs font-semibold text-success">
+                  Calibrada · {formatRelativeTime(calibrationSummary.createdAt)}
+                </span>
+              )}
+            </div>
+
+            {!hasReadings && (
+              <p className="mt-2 text-xs text-ink-soft">
+                Conecta los guantes y espera a que lleguen tramas para poder calibrar.
+              </p>
+            )}
+
+            {calibrationNotice && (
+              <p className="mt-3 rounded-md bg-brand-50 px-3 py-2 text-sm text-ink">
+                {calibrationNotice}
+              </p>
+            )}
+
+            {calibrationSummary && (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {[
+                  ['Guante derecho', calibrationSummary.derecho],
+                  ['Guante izquierdo', calibrationSummary.izquierdo],
+                ].map(([title, fingers]) => (
+                  <div key={title} className="rounded-md border border-brand-100 p-3">
+                    <p className="text-sm font-semibold text-brand-800">{title}</p>
+                    <ul className="mt-2 space-y-1 text-xs">
+                      {fingers.map((item) => (
+                        <li key={item.finger} className="flex items-center justify-between gap-2">
+                          <span className="text-ink-soft">flex {item.finger}</span>
+                          <span
+                            className={
+                              item.valid ? 'font-semibold text-ink' : 'text-ink-soft italic'
+                            }
+                          >
+                            {item.valid ? `${item.min} % → ${item.max} %` : 'sin cambios'}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </Card>
+
+      {/* 4. Grabar nueva seña */}
       <Card as="section" aria-labelledby="grabar-titulo" padding="lg" className="mt-5">
         <h2 id="grabar-titulo" className="font-display text-lg font-extrabold text-brand-800">
           Grabar nueva seña
@@ -461,7 +664,7 @@ export default function Training() {
         {message && <p className="mt-3 rounded-md bg-mint px-3 py-2 text-sm text-ink">{message}</p>}
       </Card>
 
-      {/* 4. Señas guardadas */}
+      {/* 5. Señas guardadas */}
       <section aria-labelledby="senas-titulo" className="mt-6">
         <SectionTitle
           id="senas-titulo"
@@ -536,7 +739,7 @@ export default function Training() {
         </div>
       </section>
 
-      {/* 5. Prueba de reconocimiento */}
+      {/* 6. Prueba de reconocimiento */}
       <Card as="section" aria-labelledby="prueba-titulo" padding="lg" className="mt-6">
         <h2 id="prueba-titulo" className="font-display text-lg font-extrabold text-brand-800">
           Probar el reconocimiento

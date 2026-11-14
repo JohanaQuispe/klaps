@@ -4,10 +4,16 @@ import { GLOVE_META, GLOVE_STATUS } from '../services/bluetooth/gloveState.js'
 import { BLE_GLOVES } from '../services/bluetooth/bleConfig.js'
 import { useBleDevice } from '../hooks/useBleDevice.js'
 import {
+  applyCalibration,
   buildFeatureVector,
   hasAnyReading,
   parseFrame,
 } from '../services/bluetooth/sensorFrame.js'
+import {
+  clearCalibration,
+  loadCalibration,
+  saveCalibration,
+} from '../services/bluetooth/calibration.js'
 import {
   isSensorProtocolConfigured,
   loadUuidSettings,
@@ -21,8 +27,9 @@ import {
  *
  * Además del estado de conexión, el proveedor decodifica la trama de 34 bytes
  * que envían los guantes (5 flex + 6 del MPU-6050) y publica:
- *   · readings      → última lectura de cada guante
+ *   · readings      → última lectura de cada guante (ya calibrada)
  *   · featureVector → vector bimanual de 22 dimensiones para el clasificador
+ *   · calibration   → extremos reales de los flex y línea base del IMU
  *
  * Los UUID del servicio y de la característica se configuran desde la app
  * (services/bluetooth/uuidSettings.js) porque dependen del firmware.
@@ -66,13 +73,18 @@ export default function DeviceProvider({ children }) {
   const derecho = useBleDevice()
 
   const [uuidSettings, setUuidSettings] = useState(loadUuidSettings)
+  const [calibration, setCalibration] = useState(loadCalibration)
   const attemptedSubscriptions = useRef(new Set())
 
   const configured = isSensorProtocolConfigured(uuidSettings)
 
-  // Si los UUID se guardan desde otra pantalla o pestaña, se aplican sin recargar.
+  // Si los UUID o la calibración se guardan desde otra pantalla o pestaña,
+  // se aplican sin recargar.
   useEffect(() => {
-    const refresh = () => setUuidSettings(loadUuidSettings())
+    const refresh = () => {
+      setUuidSettings(loadUuidSettings())
+      setCalibration(loadCalibration())
+    }
     window.addEventListener('focus', refresh)
     window.addEventListener('storage', refresh)
     return () => {
@@ -81,19 +93,37 @@ export default function DeviceProvider({ children }) {
     }
   }, [])
 
+  const applyCalibrationSettings = useCallback((next) => {
+    setCalibration(saveCalibration(next))
+  }, [])
+
+  const removeCalibration = useCallback(() => {
+    setCalibration(clearCalibration())
+  }, [])
+
   const applyUuidSettings = useCallback((next) => {
     attemptedSubscriptions.current = new Set()
     setUuidSettings(saveUuidSettings(next))
   }, [])
 
-  // Lecturas decodificadas (34 bytes → flex + MPU-6050)
+  // Lecturas decodificadas (34 bytes → flex + MPU-6050) y calibradas
   const derechoReading = useMemo(
-    () => parseFrame(derecho.lastPacket?.bytes ?? null, derecho.lastPacket?.at),
-    [derecho.lastPacket],
+    () =>
+      applyCalibration(
+        parseFrame(derecho.lastPacket?.bytes ?? null, derecho.lastPacket?.at),
+        calibration,
+        'derecho',
+      ),
+    [derecho.lastPacket, calibration],
   )
   const izquierdoReading = useMemo(
-    () => parseFrame(izquierdo.lastPacket?.bytes ?? null, izquierdo.lastPacket?.at),
-    [izquierdo.lastPacket],
+    () =>
+      applyCalibration(
+        parseFrame(izquierdo.lastPacket?.bytes ?? null, izquierdo.lastPacket?.at),
+        calibration,
+        'izquierdo',
+      ),
+    [izquierdo.lastPacket, calibration],
   )
 
   const featureVector = useMemo(
@@ -202,6 +232,9 @@ export default function DeviceProvider({ children }) {
       protocolConfigured: configured,
       uuidSettings,
       applyUuidSettings,
+      calibration,
+      applyCalibrationSettings,
+      removeCalibration,
       readings,
       featureVector,
       hasReadings: hasAnyReading(readings),
@@ -218,6 +251,9 @@ export default function DeviceProvider({ children }) {
       configured,
       uuidSettings,
       applyUuidSettings,
+      calibration,
+      applyCalibrationSettings,
+      removeCalibration,
       readings,
       featureVector,
       derecho.packetCount,
