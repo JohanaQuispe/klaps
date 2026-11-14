@@ -2,39 +2,38 @@ import { useState } from 'react'
 import { cn } from '../../utils/cn'
 
 /**
- * Logotipo de KLAPS.
+ * Logotipo oficial de KLAPS: la «K» con la mano y el corazón, en su versión a color.
  *
- * El símbolo oficial todavía no está disponible en un formato utilizable:
- *   · `public/brand/logo-klaps.svg` (lo subiste) es un trazado MONOCROMO e invertido
- *     (un cuadrado negro con la mano en negativo), así que no puede usarse como marca.
+ * Archivos (derivados del PNG oficial, recortado y optimizado):
+ *   · logo-klaps-mark.webp → 31 KB, versión principal
+ *   · logo-klaps-mark.png  → 50 KB, alternativa para navegadores sin WebP
  *
- * Mientras llega el archivo correcto (SVG con color o PNG 1024 × 1024 con transparencia),
- * el componente muestra el monograma provisional y NO hace ninguna petición de red.
- *
- * Para activar el logotipo definitivo:
- *   1. Guarda el archivo como  public/brand/logo-klaps-mark.svg
- *   2. Descomenta MARK_SRC
+ * El símbolo respeta su proporción (0,945 de ancho por alto): se escala por alto,
+ * nunca se deforma. Si los archivos no estuvieran disponibles, se muestra el
+ * monograma provisional sin romper el layout.
  */
-const MARK_SRC = null // '/brand/logo-klaps-mark.svg'
+const MARK_WEBP = '/brand/logo-klaps-mark.webp'
+const MARK_PNG = '/brand/logo-klaps-mark.png'
 
 export function LogoMark({ className, size = 40, withLabel = false }) {
-  const [missing, setMissing] = useState(!MARK_SRC)
+  const [missing, setMissing] = useState(false)
 
-  if (MARK_SRC && !missing) {
+  if (!missing) {
     return (
-      <img
-        src={MARK_SRC}
-        alt={withLabel ? 'Logotipo de KLAPS' : ''}
-        width={size}
-        height={size}
-        onError={() => setMissing(true)}
-        className={cn('shrink-0 object-contain', className)}
-        style={{ width: size, height: size }}
-      />
+      <picture className={cn('shrink-0', className)}>
+        <source srcSet={MARK_WEBP} type="image/webp" />
+        <img
+          src={MARK_PNG}
+          alt={withLabel ? 'KLAPS' : ''}
+          onError={() => setMissing(true)}
+          className="block h-auto w-auto object-contain"
+          style={{ height: size }}
+        />
+      </picture>
     )
   }
 
-  // Monograma provisional (no es el logotipo oficial)
+  // Monograma provisional: solo si faltan los archivos del logotipo
   return (
     <span
       aria-hidden="true"
@@ -51,7 +50,7 @@ export function LogoMark({ className, size = 40, withLabel = false }) {
 
 export default function Logo({ size = 44, showTagline = true, className }) {
   return (
-    <div className={cn('flex items-center gap-3', className)}>
+    <div className={cn('flex items-center gap-2.5', className)}>
       <LogoMark size={size} />
       <div className="min-w-0">
         <span className="block font-display text-xl leading-none font-extrabold tracking-[0.14em] text-brand-800">
