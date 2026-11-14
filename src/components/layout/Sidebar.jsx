@@ -4,6 +4,7 @@ import Logo from '../brand/Logo'
 import StatusBadge from '../common/StatusBadge'
 import { NAV_ITEMS } from './navigation'
 import { cn } from '../../utils/cn'
+import { APP_BUILD_LABEL } from '../../data/appInfo'
 
 /** Navegación lateral (escritorio ≥ 1024 px). */
 const SECONDARY_ITEMS = [
@@ -86,7 +87,7 @@ export default function Sidebar({ onOpenAccessibility }) {
             Los guantes aún no están conectados por Bluetooth. La app funciona con datos simulados.
           </p>
           <p className="mt-2 text-[0.7rem] font-semibold tracking-wide text-ink-soft">
-            KLAPS · versión 0.1
+            {APP_BUILD_LABEL}
           </p>
         </div>
       </div>

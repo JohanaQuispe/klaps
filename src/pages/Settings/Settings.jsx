@@ -11,6 +11,7 @@ import { useAccessibility } from '../../context/accessibilityContext.js'
 import { FONT_SIZES, HAND_OPTIONS, MOTION_OPTIONS } from '../../context/accessibilityOptions.js'
 import { useDevices } from '../../context/deviceContext.js'
 import { useSpeechSynthesis } from '../../hooks/useSpeechSynthesis.js'
+import { APP_STAGE, APP_VERSION } from '../../data/appInfo'
 
 function RangeField({ id, label, value, min, max, step, onChange, hint }) {
   return (
@@ -201,7 +202,7 @@ export default function Settings() {
         <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
           <div className="flex justify-between gap-2 rounded-md bg-white/70 px-3 py-2 sm:block">
             <dt className="text-ink-soft">Versión</dt>
-            <dd className="font-semibold text-ink">0.1 · Etapa 3</dd>
+            <dd className="font-semibold text-ink">{APP_VERSION} · {APP_STAGE}</dd>
           </div>
           <div className="flex justify-between gap-2 rounded-md bg-white/70 px-3 py-2 sm:block">
             <dt className="text-ink-soft">Estado de los guantes</dt>
