@@ -136,7 +136,7 @@ para que el ajuste de tamaño del usuario escale toda la interfaz (100 %, 112,5 
 | --- | --- |
 | Ilustración oficial (recorte sin texto) | `public/illustrations/klaps-hero-1200.webp` (89 KB) y variante 720 |
 | Composición completa optimizada | `public/illustrations/klaps-bienvenida-*.webp` (57–134 KB) |
-| Logotipo oficial | **pendiente** → se guarda como `public/brand/logo-klaps.svg` |
+| Logotipo oficial (K + mano + corazón) | `public/brand/logo-klaps-mark.webp` (31 KB), PNG de respaldo y favicon generado |
 | Mascota separada | **pendiente** → `public/illustrations/mascota.png` |
 
 Instrucciones completas en `public/brand/LEEME.md` y `public/illustrations/LEEME.md`.
