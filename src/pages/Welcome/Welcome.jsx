@@ -103,8 +103,9 @@ export default function Welcome() {
           <p className="mt-6 flex items-start gap-2 text-xs leading-relaxed text-ink-soft">
             <FlaskConical className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
             <span>
-              KLAPS está en desarrollo. Los guantes inteligentes todavía no están conectados: la
-              aplicación funciona en <strong className="font-semibold">modo demostración</strong>.
+              KLAPS está en desarrollo. Los guantes se conectan por{' '}
+              <strong className="font-semibold">Bluetooth LE</strong> desde tu navegador; lo que no
+              esté publicado por el dispositivo se muestra como «sin lectura», nunca simulado.
             </span>
           </p>
         </div>

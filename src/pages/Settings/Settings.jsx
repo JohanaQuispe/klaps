@@ -41,7 +41,7 @@ function RangeField({ id, label, value, min, max, step, onChange, hint }) {
 
 export default function Settings() {
   const { preferences, updatePreference, resetPreferences } = useAccessibility()
-  const { mode } = useDevices()
+  const { bluetoothSupported } = useDevices()
   const { supported, voices, speak, stop, speaking } = useSpeechSynthesis()
 
   const testVoice = () => {
@@ -179,8 +179,10 @@ export default function Settings() {
           Dispositivos
         </h2>
         <p className="mt-2 text-sm text-ink-soft">
-          Modo actual: <strong className="font-semibold text-ink">{mode}</strong>. Los guantes aún no
-          se conectan por Bluetooth; puedes revisar su estado simulado en la pantalla de guantes.
+          Conexión real por Bluetooth LE.{' '}
+          {bluetoothSupported
+            ? 'Este navegador puede conectarse a los guantes desde la pantalla de dispositivos.'
+            : 'Este navegador no admite Web Bluetooth: usa Chrome, Edge u Opera, o Chrome en Android.'}
         </p>
         <Button as={Link} to="/dispositivos" variant="secondary" size="sm" className="mt-4" iconRight={ArrowRight}>
           Ver guantes
@@ -206,7 +208,7 @@ export default function Settings() {
           </div>
           <div className="flex justify-between gap-2 rounded-md bg-white/70 px-3 py-2 sm:block">
             <dt className="text-ink-soft">Estado de los guantes</dt>
-            <dd className="font-semibold text-ink">Modo demostración</dd>
+            <dd className="font-semibold text-ink">Conexión real (BLE)</dd>
           </div>
         </dl>
       </Card>

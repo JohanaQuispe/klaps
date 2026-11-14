@@ -4,9 +4,9 @@ Aplicación de comunicación inclusiva para personas con dificultades de audici�
 movilidad. Combina guantes inteligentes, reconocimiento de gestos, voz, texto e inteligencia
 artificial para que la conversación fluya con cualquier interlocutor.
 
-> **Estado del proyecto · Etapa 4 completada.**
-> Los guantes están en desarrollo: la aplicación funciona con **datos simulados** y así lo indica
-> en todo momento. No hay conexión Bluetooth real todavía.
+> **Estado del proyecto · Etapa 5 en curso (modo real activado).**
+> Los guantes ya se conectan por **Bluetooth LE real** desde el navegador. No hay datos
+> simulados: lo que el guante no publica aparece como «sin lectura».
 
 ---
 
@@ -68,9 +68,9 @@ src/
 ├── hooks/              useSpeechSynthesis
 ├── data/               phrases.js (7 categorías y 35 frases)
 ├── pages/              Welcome, Dashboard, Translation, Voice, Phrases, History,
-│                       Emergency, Devices, Settings, ComingSoon, NotFound
-├── services/           bluetooth/mockGuards.js · bluetooth/bleClient.js ·
-│                       bluetooth/bleConfig.js · gesture/demoGestures.js ·
+│                       Emergency, Devices, Settings, NotFound
+├── services/           bluetooth/bleClient.js · bluetooth/bleConfig.js ·
+│                       bluetooth/gloveState.js · gesture/demoGestures.js ·
 │                       speech/recognition.js · emergency/sos.js
 ├── styles/index.css    tokens de marca + accesibilidad
 ├── utils/              cn, format
@@ -84,9 +84,9 @@ src/
 | --- | --- |
 | `/` | Bienvenida completa (ilustración oficial, eslogan, CTA, accesibilidad) |
 | `/inicio` | Panel: saludo, estado de los guantes, accesos, actividad reciente |
-| `/dispositivos` | Guantes izquierdo y derecho: estado, batería, RSSI, sincronización, modo demostración |
+| `/dispositivos` | Guantes izquierdo y derecho: conexión BLE real, batería y firmware publicados por el ESP32 |
 | `/ajustes` | Tamaño de texto, contraste, movimiento, mano dominante, voz, información |
-| `/traducir` | Traducción de gestos con secuencia simulada, voz, copiar y limpiar |
+| `/traducir` | Traducción de gestos: secuencia de prueba mientras se activan los sensores, voz, copiar y limpiar |
 | `/voz` | Comunicación por voz con Web Speech Recognition y errores comprensibles |
 | `/frases` | 7 categorías con iconos 3D, buscador, favoritas y vista en grande |
 | `/historial` | Filtros, escuchar, copiar, favorita y eliminar |
@@ -127,15 +127,18 @@ para que el ajuste de tamaño del usuario escale toda la interfaz (100 %, 112,5 
 
 ---
 
-## Modo demostración y separación simulación / realidad
+## Datos reales y datos pendientes
 
-- `src/services/bluetooth/mockGuards.js` genera batería, RSSI y sincronización simulados.
-- `DeviceContext` expone `mode` (`demo`). La interfaz muestra «Modo demostración» en el panel,
-  en la barra lateral y en la pantalla de guantes.
-- El botón «Bluetooth» **no** abre una conexión: explica qué falta (UUID del servicio BLE,
-  firmware y autorización HTTPS).
-- SOS y demás módulos pendientes no simulan haber enviado nada: muestran su estado real
-  («en construcción»).
+- `src/services/bluetooth/gloveState.js` define el estado de los guantes **sin simulación**:
+  batería, modelo, firmware y sincronización llegan de la conexión BLE; si el dispositivo no los
+  publica, el valor es `null` y la interfaz escribe «sin lectura».
+- `DeviceProvider` mantiene una sesión Bluetooth LE por guante (`useBleDevice`) y expone
+  `connect`, `disconnect` y `reconnect`. `mode` es siempre `'real'`.
+- La batería se muestra si el firmware publica el servicio estándar `0x180F`; el RSSI no se puede
+  leer desde Web Bluetooth y aparece como «No disponible».
+- La lectura de los sensores flex y del MPU6050 quedará activa al rellenar los UUID en
+  `services/bluetooth/bleConfig.js` (ver `docs/ble-conexion.md`).
+- SOS y demás módulos pendientes no simulan haber enviado nada: muestran su estado real.
 
 ---
 
@@ -157,6 +160,7 @@ Instrucciones completas en `public/brand/LEEME.md` y `public/illustrations/LEEME
 - `docs/etapa-1-analisis.md` — auditoría del repositorio, de los recursos y decisiones de diseño.
 - `docs/etapa-2-3-entrega.md` — sistema visual y maquetación.
 - `docs/etapa-4-entrega.md` — funcionalidad, pruebas y límites honestos.
+- `docs/etapa-5-modo-real.md` — retirada del modo demostración y conexión BLE real.
 - `docs/ble-conexion.md` — guía para conectar los guantes ESP32-D/ESP32-U por BLE.
 - `docs/como-ejecutar.md` — arrancar la app, comprobar el build y resolver fallos comunes.
 - `docs/firmware/prueba-ble/prueba-ble.ino` — sketch de prueba que anuncia `KLAPS-TEST` para validar la radio BLE.

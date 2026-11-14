@@ -3,7 +3,6 @@ import {
   BluetoothOff,
   CircleCheck,
   CircleHelp,
-  FlaskConical,
   Loader2,
   TriangleAlert,
 } from 'lucide-react'
@@ -34,11 +33,6 @@ const statusStyles = {
     label: 'Error de conexión',
     icon: TriangleAlert,
     classes: 'bg-danger-soft text-danger',
-  },
-  demo: {
-    label: 'Modo demostración',
-    icon: FlaskConical,
-    classes: 'bg-warning-soft text-warning',
   },
   exito: {
     label: 'Listo',

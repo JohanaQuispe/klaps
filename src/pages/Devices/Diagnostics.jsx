@@ -458,7 +458,7 @@ export default function Diagnostics() {
         </ol>
 
         <p className="mt-4 rounded-md bg-brand-50 p-3 text-xs text-ink-soft">
-          El <strong>RSSI</strong> que ves en modo demostración no existe en Web Bluetooth: el
+          El <strong>RSSI</strong> no lo expone Web Bluetooth en una conexión abierta: el
           navegador no expone la intensidad de señal de un dispositivo conectado. En modo real se
           mostrará la calidad del enlace solo si el firmware la publica como dato propio.
         </p>

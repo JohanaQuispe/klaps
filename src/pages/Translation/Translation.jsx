@@ -59,7 +59,7 @@ export default function Translation() {
     }
 
     setDetecting(false)
-    addEntry({ type: 'gesto', text: collected.join(' '), source: 'Secuencia simulada' })
+    addEntry({ type: 'gesto', text: collected.join(' '), source: 'Secuencia de prueba' })
   }
 
   const stopDemo = () => {
@@ -79,17 +79,17 @@ export default function Translation() {
         eyebrow="Traducción"
         title="Traducción de gestos"
         description="Tus guantes leen el movimiento de las manos y KLAPS lo convierte en texto y voz."
-        actions={<StatusBadge status="demo" />}
+        actions={<StatusBadge status="pendiente" label="Sin lectura del guante" />}
       />
 
       <Card tone="butter" padding="md" className="mb-5 flex items-start gap-3">
         <FlaskConical className="mt-0.5 size-5 shrink-0 text-warning" aria-hidden="true" />
         <div>
-          <p className="font-display font-bold text-brand-800">Modo demostración</p>
+          <p className="font-display font-bold text-brand-800">Secuencia de prueba</p>
           <p className="mt-1 text-sm text-ink">
-            No hay guantes conectados. El texto que aparece proviene de una <strong>secuencia
-            simulada</strong> con el mismo ritmo que tendrá la lectura real de los sensores flex y
-            del MPU6050.
+            La lectura de los sensores flex y del MPU6050 todavía no está activada. El texto que
+            aparece proviene de una <strong>secuencia de prueba</strong> con el mismo ritmo que
+            tendrá la lectura real; no es un gesto detectado por tus guantes.
           </p>
         </div>
       </Card>

@@ -10,8 +10,9 @@ La pantalla **`/dispositivos/diagnostico`** abre una conexión **real** con Web 
    suscribirse a las que tengan `notify`, con un registro en vivo en hexadecimal y texto.
 4. Botón «Copiar UUID» para pegar el resultado y configurar la lectura de sensores.
 
-Las tarjetas de `/dispositivos` siguen en **modo demostración**: no muestran datos del guante
-real hasta que exista el protocolo (UUID + formato), para no inventar lecturas.
+Las tarjetas de `/dispositivos` trabajan ya en **modo real**: abren la conexión y muestran solo lo
+que el guante publica (batería con `0x180F`, modelo y firmware). Lo que no está publicado aparece
+como «sin lectura»; no se inventan valores.
 
 ## 2. Requisitos imprescindibles
 
@@ -168,9 +169,8 @@ Puedes obtener los tres primeros puntos sin tocar código: conecta la placa en
 
 ## 6. Límites que conviene conocer
 
-- **RSSI**: Web Bluetooth no expone la intensidad de señal de un dispositivo conectado. El valor
-  que ves en las tarjetas es simulado; en modo real se mostrará solo si el firmware lo publica
-  como dato propio.
+- **RSSI**: Web Bluetooth no expone la intensidad de señal de un dispositivo conectado. La app
+  muestra «No disponible»; solo se verá si el firmware lo publica como dato propio.
 - **iOS**: cualquier navegador en iPhone/iPad queda fuera por decisión de Apple (WebKit no
   implementa Web Bluetooth). La alternativa sería una app nativa.
 - **Sin emparejamiento previo**: no se puede reconectar solo con el identificador. El usuario
@@ -185,8 +185,8 @@ namePrefixes: ['KLAPS', 'ESP32', 'Guante'],  // filtros del selector
 UUID: { service: null, sensors: null, gesture: null }, // ← rellenar aquí
 ```
 
-`isGloveProtocolConfigured()` indica si ya se puede leer el hardware. Mientras devuelva `false`,
-la aplicación mantiene el modo demostración y lo avisa en pantalla.
+`isGloveProtocolConfigured()` indica si ya se pueden leer los sensores. Mientras devuelva `false`,
+las tarjetas muestran el estado real de conexión pero sin lecturas de sensores.
 
 ## 8. Si tu ESP32 no aparece en el selector
 

@@ -43,7 +43,7 @@ const QUICK_ACTIONS = [
 ]
 
 export default function Dashboard() {
-  const { gloves, mode } = useDevices()
+  const { gloves } = useDevices()
   const connected = gloves.filter((glove) => glove.status === 'conectado').length
 
   return (
@@ -58,11 +58,15 @@ export default function Dashboard() {
               Hola, ¿qué necesitas comunicar hoy?
             </h1>
             <p className="mt-2 max-w-prose text-sm text-ink-soft sm:text-base">
-              Tienes {connected} de {gloves.length} guantes conectados.
-              {mode === 'demo' && ' Los datos de esta sesión son simulados.'}
+              Tienes {connected} de {gloves.length} guantes conectados por Bluetooth LE.
+              {connected === 0 && ' Conéctalos desde Dispositivos para empezar a recibir datos.'}
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
-              <StatusBadge status="demo" size="sm" />
+              <StatusBadge
+                status={connected > 0 ? 'conectado' : 'desconectado'}
+                label={connected > 0 ? 'Guantes activos' : 'Sin guantes conectados'}
+                size="sm"
+              />
               <Link
                 to="/dispositivos"
                 className="inline-flex min-h-8 items-center gap-1 rounded-full px-1 text-sm font-semibold text-brand-700 underline underline-offset-2"
@@ -80,7 +84,7 @@ export default function Dashboard() {
         <SectionTitle
           id="guantes-titulo"
           title="Tus guantes"
-          description="Estado de los dos guantes ESP32 vinculados a tu cuenta."
+          description="Estado real de los dos guantes ESP32 vinculados a tu cuenta."
           action={
             <Button as={Link} to="/dispositivos" variant="ghost" size="sm" iconRight={ArrowRight}>
               Detalles
