@@ -1,80 +1,92 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo } from 'react'
 import { DeviceContext } from './deviceContext.js'
-import { GLOVE_STATUS, createInitialGloves, tickGlove } from '../services/bluetooth/mockGuards.js'
+import { GLOVE_META, GLOVE_STATUS } from '../services/bluetooth/gloveState.js'
+import { BLE_GLOVES, isGloveProtocolConfigured } from '../services/bluetooth/bleConfig.js'
+import { useBleDevice } from '../hooks/useBleDevice.js'
 
 /**
- * Estado de los guantes KLAPS.
+ * Estado de los guantes KLAPS · MODO REAL
+ * ---------------------------------------
+ * Cada guante tiene su propia sesión Bluetooth LE (useBleDevice). No hay
+ * simulación: la batería, el firmware y el modelo salen de lo que el ESP32
+ * publica de verdad; si no publica nada, el valor queda en `null`.
  *
- * `mode` es SIEMPRE explícito:
- *   'demo' → datos simulados (services/bluetooth/mockGuards.js). Es el modo
- *            actual, porque el hardware ESP32 aún no expone un servicio BLE.
- *   'real' → reservado para services/bluetooth/bleClient.js (pendiente).
+ * La conexión siempre la inicia el usuario con un clic, porque el navegador
+ * exige un gesto para abrir el selector de dispositivos.
  */
+
+const BLE_TO_GLOVE_STATUS = {
+  idle: GLOVE_STATUS.DESCONECTADO,
+  requesting: GLOVE_STATUS.CONECTANDO,
+  connecting: GLOVE_STATUS.CONECTANDO,
+  connected: GLOVE_STATUS.CONECTADO,
+  error: GLOVE_STATUS.ERROR,
+}
+
+/** Traduce una sesión BLE a la forma que consumen las pantallas. */
+function toGlove(id, session) {
+  const standard = session.standardInfo
+  const lastLog = session.logs[0]
+  const connected = session.status === 'connected'
+
+  return {
+    ...GLOVE_META[id],
+    board: BLE_GLOVES[id].board,
+    status: BLE_TO_GLOVE_STATUS[session.status] ?? GLOVE_STATUS.DESCONECTADO,
+    battery: standard?.battery ?? null,
+    // Web Bluetooth no expone el RSSI de una conexión abierta.
+    rssi: null,
+    lastSyncAt: connected ? (lastLog?.at ?? null) : null,
+    firmware: standard?.firmware ?? null,
+    model: standard?.model ?? null,
+    manufacturer: standard?.manufacturer ?? null,
+    deviceName: session.deviceInfo?.name ?? null,
+    error: session.error ?? '',
+  }
+}
+
 export default function DeviceProvider({ children }) {
-  const [gloves, setGloves] = useState(createInitialGloves)
-  const [mode] = useState('demo')
-  const timers = useRef(new Map())
+  const izquierdo = useBleDevice()
+  const derecho = useBleDevice()
+
+  const connect = useCallback(
+    (id) => {
+      const session = id === 'izquierdo' ? izquierdo : derecho
+      const glove = BLE_GLOVES[id]
+      if (!session || !glove) return
+      session.connect({ namePrefix: glove.namePrefix })
+    },
+    [izquierdo, derecho],
+  )
+
+  const disconnect = useCallback(
+    (id) => {
+      const session = id === 'izquierdo' ? izquierdo : derecho
+      session?.disconnect()
+    },
+    [izquierdo, derecho],
+  )
+
+  const gloves = useMemo(
+    () => [toGlove('izquierdo', izquierdo), toGlove('derecho', derecho)],
+    [izquierdo, derecho],
+  )
 
   const bluetoothSupported =
     typeof navigator !== 'undefined' && typeof navigator.bluetooth !== 'undefined'
 
-  // Simulación: refresco suave de batería y señal mientras el guante está conectado
-  useEffect(() => {
-    if (mode !== 'demo') return undefined
-    const interval = window.setInterval(() => {
-      setGloves((prev) => prev.map(tickGlove))
-    }, 3000)
-    return () => window.clearInterval(interval)
-  }, [mode])
-
-  const setStatus = useCallback((id, status) => {
-    setGloves((prev) => prev.map((glove) => (glove.id === id ? { ...glove, status } : glove)))
-  }, [])
-
-  const disconnect = useCallback(
-    (id) => {
-      setStatus(id, GLOVE_STATUS.DESCONECTADO)
-      setGloves((prev) =>
-        prev.map((glove) => (glove.id === id ? { ...glove, rssi: null } : glove)),
-      )
-    },
-    [setStatus],
-  )
-
-  const reconnect = useCallback(
-    (id) => {
-      setStatus(id, GLOVE_STATUS.CONECTANDO)
-      const existing = timers.current.get(id)
-      if (existing) window.clearTimeout(existing)
-
-      const timer = window.setTimeout(() => {
-        setGloves((prev) =>
-          prev.map((glove) =>
-            glove.id === id
-              ? { ...glove, status: GLOVE_STATUS.CONECTADO, rssi: -58, lastSyncAt: Date.now() }
-              : glove,
-          ),
-        )
-        timers.current.delete(id)
-      }, 1800)
-
-      timers.current.set(id, timer)
-    },
-    [setStatus],
-  )
-
-  // Limpieza de temporizadores al desmontar
-  useEffect(() => {
-    const map = timers.current
-    return () => {
-      map.forEach((timer) => window.clearTimeout(timer))
-      map.clear()
-    }
-  }, [])
-
   const value = useMemo(
-    () => ({ gloves, mode, bluetoothSupported, disconnect, reconnect, setStatus }),
-    [gloves, mode, bluetoothSupported, disconnect, reconnect, setStatus],
+    () => ({
+      gloves,
+      mode: 'real',
+      bluetoothSupported,
+      protocolConfigured: isGloveProtocolConfigured(),
+      connect,
+      disconnect,
+      // `reconnect` se mantiene como alias para no romper las pantallas existentes.
+      reconnect: connect,
+    }),
+    [gloves, bluetoothSupported, connect, disconnect],
   )
 
   return <DeviceContext.Provider value={value}>{children}</DeviceContext.Provider>

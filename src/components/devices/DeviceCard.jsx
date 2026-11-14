@@ -4,8 +4,8 @@ import { Clock, Hand, Power, RefreshCw, SlidersHorizontal } from 'lucide-react'
 import Button from '../common/Button'
 import StatusBadge from '../common/StatusBadge'
 import ProgressBar from '../common/ProgressBar'
-import { batteryState, signalState, GLOVE_STATUS } from '../../services/bluetooth/mockGuards.js'
-import { formatBattery, formatRelativeTime, formatRssi } from '../../utils/format.js'
+import { batteryState, signalState, GLOVE_STATUS } from '../../services/bluetooth/gloveState.js'
+import { formatBattery, formatRelativeTime } from '../../utils/format.js'
 import { cn } from '../../utils/cn'
 
 /** Miniatura del guante oficial; si falta el archivo cae al icono, sin imagen rota. */
@@ -49,12 +49,13 @@ function SignalBars({ bars }) {
   )
 }
 
-/** Tarjeta completa de un guante (pantalla Dispositivos). */
+/** Tarjeta completa de un guante (pantalla Dispositivos). Solo datos reales. */
 export default function DeviceCard({ glove, onReconnect, onDisconnect, onRequestConnect }) {
   const battery = batteryState(glove.battery)
   const signal = signalState(glove.rssi)
   const isConnected = glove.status === GLOVE_STATUS.CONECTADO
   const isConnecting = glove.status === GLOVE_STATUS.CONECTANDO
+  const hasBattery = typeof glove.battery === 'number'
 
   const batteryTone =
     battery.tone === 'danger' ? 'danger' : battery.tone === 'warning' ? 'warning' : 'brand'
@@ -67,28 +68,37 @@ export default function DeviceCard({ glove, onReconnect, onDisconnect, onRequest
           <div className="min-w-0">
             <h3 className="font-display text-lg font-extrabold text-brand-800">{glove.label}</h3>
             <p className="text-sm text-ink-soft">{glove.role}</p>
+            <p className="mt-0.5 text-xs text-ink-soft">
+              {glove.deviceName ? `BLE: ${glove.deviceName}` : `${glove.board} · sin vincular`}
+            </p>
           </div>
         </div>
         <StatusBadge status={glove.status} />
       </header>
 
-      <div className="mt-5 space-y-4">
-        <div>
-          <ProgressBar
-            value={glove.battery}
-            label="Batería"
-            valueLabel={formatBattery(glove.battery)}
-            tone={batteryTone}
-          />
-          <p className="mt-1 text-xs font-medium text-ink-soft">{battery.label}</p>
-        </div>
+      <div className="mt-5 flex-1 space-y-4">
+        {hasBattery ? (
+          <div>
+            <ProgressBar
+              value={glove.battery}
+              label="Batería"
+              valueLabel={formatBattery(glove.battery)}
+              tone={batteryTone}
+            />
+            <p className="mt-1 text-xs font-medium text-ink-soft">{battery.label}</p>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-3 rounded-md bg-brand-50 px-3.5 py-3">
+            <span className="text-sm font-medium text-ink-soft">Batería</span>
+            <span className="text-sm font-semibold text-ink">{battery.label}</span>
+          </div>
+        )}
 
         <div className="flex items-center justify-between gap-3 rounded-md bg-brand-50 px-3.5 py-3">
           <span className="text-sm font-medium text-ink-soft">Señal (RSSI)</span>
           <span className="flex items-center gap-2 text-sm font-semibold text-ink">
             <SignalBars bars={signal.bars} />
-            <span>{formatRssi(glove.rssi)}</span>
-            <span className="text-xs font-medium text-ink-soft">· {signal.label}</span>
+            <span>{signal.label}</span>
           </span>
         </div>
 
@@ -96,9 +106,17 @@ export default function DeviceCard({ glove, onReconnect, onDisconnect, onRequest
           <Clock className="size-4 shrink-0" aria-hidden="true" />
           <span>
             Última sincronización:{' '}
-            <span className="font-semibold text-ink">{formatRelativeTime(glove.lastSyncAt)}</span>
+            <span className="font-semibold text-ink">
+              {glove.lastSyncAt ? formatRelativeTime(glove.lastSyncAt) : 'sin sincronizar'}
+            </span>
           </span>
         </div>
+
+        {glove.error && (
+          <p className="rounded-md bg-danger-soft px-3.5 py-2 text-xs font-semibold text-danger">
+            {glove.error}
+          </p>
+        )}
       </div>
 
       <div className="mt-5 flex flex-wrap gap-2 pt-1">
@@ -113,7 +131,7 @@ export default function DeviceCard({ glove, onReconnect, onDisconnect, onRequest
             onClick={() => onReconnect?.(glove.id)}
             disabled={isConnecting}
           >
-            {isConnecting ? 'Conectando…' : 'Reconectar'}
+            {isConnecting ? 'Conectando…' : 'Conectar'}
           </Button>
         )}
         <Button
@@ -128,10 +146,10 @@ export default function DeviceCard({ glove, onReconnect, onDisconnect, onRequest
         <Button
           size="sm"
           variant="ghost"
-          aria-label={`Conectar ${glove.label} por Bluetooth`}
+          aria-label={`Cómo conectar ${glove.label} por Bluetooth`}
           onClick={() => onRequestConnect?.(glove)}
         >
-          Bluetooth
+          Cómo conectar
         </Button>
       </div>
     </article>
@@ -141,6 +159,7 @@ export default function DeviceCard({ glove, onReconnect, onDisconnect, onRequest
 /** Fila compacta de un guante (resumen del Panel). */
 export function DeviceRow({ glove }) {
   const signal = signalState(glove.rssi)
+  const hasBattery = typeof glove.battery === 'number'
 
   return (
     <div className="flex items-center justify-between gap-3 py-2.5">
@@ -159,7 +178,7 @@ export function DeviceRow({ glove }) {
         <div className="min-w-0">
           <p className="truncate font-display text-sm font-bold text-brand-800">{glove.label}</p>
           <p className="text-xs text-ink-soft">
-            {formatBattery(glove.battery)} · {signal.label}
+            {hasBattery ? formatBattery(glove.battery) : 'Sin lectura'} · {signal.label}
           </p>
         </div>
       </div>

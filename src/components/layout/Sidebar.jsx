@@ -5,6 +5,8 @@ import StatusBadge from '../common/StatusBadge'
 import { NAV_ITEMS } from './navigation'
 import { cn } from '../../utils/cn'
 import { APP_BUILD_LABEL } from '../../data/appInfo'
+import { useDevices } from '../../context/deviceContext.js'
+import { GLOVE_STATUS } from '../../services/bluetooth/gloveState.js'
 
 /** Navegación lateral (escritorio ≥ 1024 px). */
 const SECONDARY_ITEMS = [
@@ -14,6 +16,9 @@ const SECONDARY_ITEMS = [
 ]
 
 export default function Sidebar({ onOpenAccessibility }) {
+  const { gloves } = useDevices()
+  const connected = gloves.filter((glove) => glove.status === GLOVE_STATUS.CONECTADO).length
+
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 flex-col border-r border-brand-100 bg-white/90 px-5 py-6 backdrop-blur-md lg:flex">
       <NavLink to="/" aria-label="Ir a la bienvenida de KLAPS" className="rounded-md">
@@ -82,9 +87,15 @@ export default function Sidebar({ onOpenAccessibility }) {
         </button>
 
         <div className="rounded-md bg-brand-50 p-3.5">
-          <StatusBadge status="demo" size="sm" />
+          <StatusBadge
+            status={connected > 0 ? 'conectado' : 'desconectado'}
+            label={`${connected} de ${gloves.length} guantes`}
+            size="sm"
+          />
           <p className="mt-2 text-xs leading-relaxed text-ink-soft">
-            Los guantes aún no están conectados por Bluetooth. La app funciona con datos simulados.
+            {connected > 0
+              ? 'Conexión real por Bluetooth LE. Los datos que ves vienen de tus guantes.'
+              : 'Aún no hay guantes conectados. Ve a Dispositivos para vincularlos por Bluetooth LE.'}
           </p>
           <p className="mt-2 text-[0.7rem] font-semibold tracking-wide text-ink-soft">
             {APP_BUILD_LABEL}
