@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   describeBluetoothError,
+  getBluetoothBlockReason,
   inspectDevice,
   isSecureContext,
   isWebBluetoothAvailable,
@@ -21,6 +22,7 @@ import {
 export function useBleDevice() {
   const supported = isWebBluetoothAvailable()
   const secure = isSecureContext()
+  const blockReason = getBluetoothBlockReason()
 
   const [status, setStatus] = useState('idle')
   const [deviceInfo, setDeviceInfo] = useState(null)
@@ -74,7 +76,7 @@ export function useBleDevice() {
   }, [pushLog])
 
   const connect = useCallback(
-    async ({ namePrefix, acceptAll = false } = {}) => {
+    async ({ namePrefix, acceptAll = false, extraServices = [] } = {}) => {
       setError('')
       setLogs([])
       setServices([])
@@ -83,7 +85,7 @@ export function useBleDevice() {
 
       let device
       try {
-        device = await requestGloveDevice({ namePrefix, acceptAll })
+        device = await requestGloveDevice({ namePrefix, acceptAll, extraServices })
       } catch (requestError) {
         if (requestError?.name === 'NotFoundError') {
           setStatus('idle')
@@ -169,6 +171,7 @@ export function useBleDevice() {
   return {
     supported,
     secure,
+    blockReason,
     status,
     deviceInfo,
     services,

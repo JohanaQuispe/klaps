@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bluetooth, Copy, FlaskConical, Plug, Radio, Trash2, Unplug } from 'lucide-react'
+import { Bluetooth, Copy, FlaskConical, Plug, Radio, ScanLine, Trash2, Unplug } from 'lucide-react'
 import PageHeader from '../../components/layout/PageHeader'
 import Card from '../../components/common/Card'
 import Button from '../../components/common/Button'
@@ -9,7 +9,11 @@ import SectionTitle from '../../components/common/SectionTitle'
 import { useBleDevice } from '../../hooks/useBleDevice.js'
 import { useClipboard } from '../../hooks/useClipboard.js'
 import { BLE_CONFIG, BLE_GLOVES } from '../../services/bluetooth/bleConfig.js'
-import { shortUuid } from '../../services/bluetooth/bleClient.js'
+import {
+  describeBluetoothBlockReason,
+  isValidUuid,
+  shortUuid,
+} from '../../services/bluetooth/bleClient.js'
 import { cn } from '../../utils/cn'
 
 const STATUS_LABEL = {
@@ -21,26 +25,73 @@ const STATUS_LABEL = {
 }
 
 const GLOVE_OPTIONS = [
-  { value: 'cualquiera', label: 'Cualquier dispositivo BLE (ESP32)' },
+  { value: 'cualquiera', label: 'Cualquier dispositivo BLE (sin filtro de nombre)' },
+  { value: 'klaps', label: 'Cualquier placa cuyo nombre empiece por «KLAPS»' },
+  { value: 'esp32', label: 'Cualquier placa cuyo nombre empiece por «ESP32»' },
   { value: 'derecho', label: `${BLE_GLOVES.derecho.label} · ${BLE_GLOVES.derecho.board}` },
   { value: 'izquierdo', label: `${BLE_GLOVES.izquierdo.label} · ${BLE_GLOVES.izquierdo.board}` },
+]
+
+/** UUID del servicio propio que el usuario conoce por su firmware. */
+const EXTRA_SERVICE_KEY = 'klaps.ble.serviceUuid'
+
+/** Comprobaciones cuando la placa no aparece en el selector del navegador. */
+const NOT_LISTED_CHECKS = [
+  'El firmware debe anunciarse por BLE (GATT). Si usa Bluetooth clásico —BluetoothSerial, SPP— el navegador no puede verlo: hay que recompilarlo con BLE.',
+  'Comprueba que el sketch llame a BLEDevice::startAdvertising() y que la placa no esté conectada a otra app o a otro móvil: mientras tiene una conexión, deja de anunciarse.',
+  'Reinicia la placa con el botón EN después de cada flasheo y mantenla a menos de un metro durante la búsqueda.',
+  'Algunas variantes no tienen Bluetooth (ESP32-S2). ESP32, S3 y C3 sí incluyen BLE.',
+  'Si tu placa anuncia otro nombre (por ejemplo KLAPS-D), elige «Cualquier dispositivo BLE» para quitar el filtro.',
 ]
 
 export default function Diagnostics() {
   const ble = useBleDevice()
   const { copy, copied, error: copyError } = useClipboard()
   const [target, setTarget] = useState('cualquiera')
+  const [extraService, setExtraService] = useState('')
+  const [savedUuid, setSavedUuid] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    return window.localStorage.getItem(EXTRA_SERVICE_KEY) ?? ''
+  })
+
+  const bluetoothNotice = describeBluetoothBlockReason(
+    ble.blockReason,
+    typeof window !== 'undefined' ? window.location.host : '',
+  )
 
   const busy = ble.status === 'requesting' || ble.status === 'connecting'
   const statusInfo = STATUS_LABEL[ble.status] ?? STATUS_LABEL.idle
 
+  const extraServices = savedUuid ? [savedUuid] : []
+
   const handleConnect = () => {
+    // Sin filtro: aparece cualquier dispositivo BLE, se llame como se llame.
     if (target === 'cualquiera') {
-      ble.connect({ namePrefix: BLE_CONFIG.namePrefixes[1], acceptAll: false })
+      ble.connect({ acceptAll: true, extraServices })
       return
     }
-    const glove = BLE_GLOVES[target]
-    ble.connect({ namePrefix: glove.namePrefix })
+    if (target === 'klaps') {
+      ble.connect({ namePrefix: BLE_CONFIG.namePrefixes[0], extraServices })
+      return
+    }
+    if (target === 'esp32') {
+      ble.connect({ namePrefix: BLE_CONFIG.namePrefixes[1], extraServices })
+      return
+    }
+    ble.connect({ namePrefix: BLE_GLOVES[target].namePrefix, extraServices })
+  }
+
+  const saveUuid = () => {
+    const uuid = extraService.trim().toLowerCase()
+    if (!isValidUuid(uuid)) return
+    window.localStorage.setItem(EXTRA_SERVICE_KEY, uuid)
+    setSavedUuid(uuid)
+    setExtraService('')
+  }
+
+  const clearUuid = () => {
+    window.localStorage.removeItem(EXTRA_SERVICE_KEY)
+    setSavedUuid('')
   }
 
   const uuidSummary = ble.services
@@ -70,19 +121,11 @@ export default function Diagnostics() {
         actions={<StatusBadge status={statusInfo.status} label={statusInfo.label} />}
       />
 
-      {!ble.supported && (
+      {bluetoothNotice && (
         <ErrorMessage
           className="mb-5"
-          title="Este navegador no admite Web Bluetooth"
-          description="Se necesita Chrome, Edge u Opera en escritorio, o Chrome en Android. Safari (iOS y macOS) y Firefox no lo incluyen, y además el sitio debe abrirse por HTTPS o en localhost."
-        />
-      )}
-
-      {ble.supported && !ble.secure && (
-        <ErrorMessage
-          className="mb-5"
-          title="Hace falta una conexión segura"
-          description="Web Bluetooth solo funciona en HTTPS o en localhost. Abre la aplicación desde la dirección segura para poder conectar el guante."
+          title={bluetoothNotice.title}
+          description={bluetoothNotice.description}
         />
       )}
 
@@ -114,9 +157,10 @@ export default function Diagnostics() {
               ))}
             </select>
             <p className="mt-1 text-xs text-ink-soft">
-              Se buscan dispositivos cuyo nombre empiece por{' '}
-              <strong>{BLE_CONFIG.namePrefixes.join(', ')}</strong>. Puedes cambiarlo en{' '}
-              <code>services/bluetooth/bleConfig.js</code>.
+              «Sin filtro» abre el selector con <strong>todos</strong> los dispositivos BLE que
+              estén anunciándose. Las demás opciones filtran por nombre (
+              {BLE_CONFIG.namePrefixes.join(', ')}), así que una placa con otro nombre no
+              aparecería. Puedes cambiarlo en <code>services/bluetooth/bleConfig.js</code>.
             </p>
           </div>
 
@@ -169,6 +213,99 @@ export default function Diagnostics() {
             </div>
           </dl>
         )}
+      </Card>
+
+      {ble.status === 'connected' && ble.services.length === 0 && (
+        <ErrorMessage
+          className="mt-5"
+          title="Conectado, pero el navegador no muestra ningún servicio"
+          description="Chrome solo deja leer servicios que se declaran antes de conectar. Si tu guante publica un servicio propio, pega su UUID más abajo (lo tienes en el firmware) y vuelve a conectar para verlo y copiarlo."
+        />
+      )}
+
+      <Card as="section" aria-labelledby="servicio-propio" padding="lg" className="mt-6">
+        <h2
+          id="servicio-propio"
+          className="flex items-center gap-2 font-display text-lg font-extrabold text-brand-800"
+        >
+          <Plug className="size-5 text-brand-600" aria-hidden="true" />
+          Servicio propio del guante (opcional)
+        </h2>
+        <p className="mt-1 text-sm text-ink-soft">
+          Web Bluetooth solo puede explorar los servicios que se declaran al conectar. Pega el UUID
+          del servicio de tu firmware para que aparezca en el diagnóstico y puedas copiar sus
+          características. Se guarda en este navegador.
+        </p>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+          <div>
+            <label htmlFor="uuid-servicio" className="text-sm font-semibold text-ink">
+              UUID del servicio
+            </label>
+            <input
+              id="uuid-servicio"
+              type="text"
+              inputMode="text"
+              autoComplete="off"
+              spellCheck="false"
+              value={extraService}
+              onChange={(event) => setExtraService(event.target.value)}
+              placeholder="0000abcd-0000-1000-8000-00805f9b34fb"
+              className="mt-1 min-h-12 w-full rounded-md border border-brand-200 bg-white px-3 font-mono text-sm text-ink"
+            />
+            {extraService && !isValidUuid(extraService) && (
+              <p className="mt-1 text-xs font-semibold text-danger">
+                Debe ser un UUID de 16 bits (4 caracteres) o de 128 bits (8-4-4-4-12).
+              </p>
+            )}
+          </div>
+
+          <div className="flex gap-2">
+            <Button onClick={saveUuid} disabled={!isValidUuid(extraService)}>
+              Guardar UUID
+            </Button>
+            {savedUuid && (
+              <Button variant="secondary" onClick={clearUuid}>
+                Quitar
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {savedUuid && (
+          <p className="mt-3 rounded-md bg-brand-50 px-3 py-2 font-mono text-xs font-semibold break-all text-brand-800">
+            Se buscará el servicio {savedUuid} en la próxima conexión.
+          </p>
+        )}
+      </Card>
+
+      <Card as="section" aria-labelledby="no-aparece" padding="lg" className="mt-6">
+        <h2
+          id="no-aparece"
+          className="flex items-center gap-2 font-display text-lg font-extrabold text-brand-800"
+        >
+          <ScanLine className="size-5 text-brand-600" aria-hidden="true" />
+          ¿No aparece tu ESP32 en la lista?
+        </h2>
+        <p className="mt-1 text-sm text-ink-soft">
+          La app solo puede elegir dispositivos que el navegador vea anunciarse. Si tu placa no
+          está en la lista, el motivo casi siempre está en el firmware o en el adaptador del
+          equipo, no en KLAPS.
+        </p>
+        <ul className="mt-4 space-y-2 text-sm text-ink">
+          {NOT_LISTED_CHECKS.map((check) => (
+            <li key={check} className="flex gap-2">
+              <span aria-hidden="true" className="mt-2 size-1.5 shrink-0 rounded-full bg-brand-500" />
+              <span>{check}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-4 rounded-md bg-brand-50 p-3 text-sm text-ink">
+          <strong>Prueba decisiva:</strong> abre <code>chrome://bluetooth-internals</code> en otra
+          pestaña, pulsa <em>Start Scan</em> y busca tu placa en esa lista. Si Chrome tampoco la
+          ve allí, el problema es del anuncio BLE del ESP32; si aparece ahí y no en KLAPS, es el
+          filtro de nombre.
+        </p>
       </Card>
 
       {ble.services.length > 0 && (
