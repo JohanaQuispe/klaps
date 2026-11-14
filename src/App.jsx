@@ -9,6 +9,7 @@ import History from './pages/History/History.jsx'
 import Emergency from './pages/Emergency/Emergency.jsx'
 import Devices from './pages/Devices/Devices.jsx'
 import Diagnostics from './pages/Devices/Diagnostics.jsx'
+import Training from './pages/Training/Training.jsx'
 import Settings from './pages/Settings/Settings.jsx'
 import NotFound from './pages/NotFound/NotFound.jsx'
 
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="/emergencia" element={<Emergency />} />
         <Route path="/dispositivos" element={<Devices />} />
         <Route path="/dispositivos/diagnostico" element={<Diagnostics />} />
+        <Route path="/entrenamiento" element={<Training />} />
         <Route path="/ajustes" element={<Settings />} />
 
         <Route path="*" element={<NotFound />} />

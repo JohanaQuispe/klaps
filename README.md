@@ -65,12 +65,13 @@ src/
 │   └── layout/         AppShell, Sidebar, MobileTabBar, PageHeader, SkipLink, navigation
 ├── context/            accessibilityContext, AccessibilityProvider, deviceContext,
 │                       DeviceProvider, accessibilityOptions
-├── hooks/              useSpeechSynthesis
+├── hooks/              useSpeechSynthesis, useBleDevice, useGestureRecognition
 ├── data/               phrases.js (7 categorías y 35 frases)
-├── pages/              Welcome, Dashboard, Translation, Voice, Phrases, History,
+├── pages/              Welcome, Dashboard, Translation, Training, Voice, Phrases, History,
 │                       Emergency, Devices, Settings, NotFound
-├── services/           bluetooth/bleClient.js · bluetooth/bleConfig.js ·
-│                       bluetooth/gloveState.js · gesture/demoGestures.js ·
+├── services/           bluetooth/bleClient.js · bleConfig.js · gloveState.js ·
+│                       sensorFrame.js · uuidSettings.js ·
+│                       gesture/knnClassifier.js · trainingStore.js · sentence.js ·
 │                       speech/recognition.js · emergency/sos.js
 ├── styles/index.css    tokens de marca + accesibilidad
 ├── utils/              cn, format
@@ -86,12 +87,13 @@ src/
 | `/inicio` | Panel: saludo, estado de los guantes, accesos, actividad reciente |
 | `/dispositivos` | Guantes izquierdo y derecho: conexión BLE real, batería y firmware publicados por el ESP32 |
 | `/ajustes` | Tamaño de texto, contraste, movimiento, mano dominante, voz, información |
-| `/traducir` | Traducción de gestos: secuencia de prueba mientras se activan los sensores, voz, copiar y limpiar |
+| `/traducir` | Traducción en vivo con KNN: confianza ≥ 75 %, estabilización de 600 ms, voz, corrección de sintaxis y SOS |
 | `/voz` | Comunicación por voz con Web Speech Recognition y errores comprensibles |
 | `/frases` | 7 categorías con iconos 3D, buscador, favoritas y vista en grande |
 | `/historial` | Filtros, escuchar, copiar, favorita y eliminar |
 | `/emergencia` | SOS en dos pasos, contacto, gesto y ubicación con estado honesto del envío |
 | `/dispositivos/diagnostico` | Conexión BLE real: descubre servicios, características y notificaciones del ESP32 |
+| `/entrenamiento` | Grabar señas (20 muestras a 20 Hz), UUID del firmware, exportar/importar y probar el KNN |
 
 ---
 
@@ -136,8 +138,9 @@ para que el ajuste de tamaño del usuario escale toda la interfaz (100 %, 112,5 
   `connect`, `disconnect` y `reconnect`. `mode` es siempre `'real'`.
 - La batería se muestra si el firmware publica el servicio estándar `0x180F`; el RSSI no se puede
   leer desde Web Bluetooth y aparece como «No disponible».
-- La lectura de los sensores flex y del MPU6050 quedará activa al rellenar los UUID en
-  `services/bluetooth/bleConfig.js` (ver `docs/ble-conexion.md`).
+- La trama de 34 bytes (5 flex + 6 del MPU-6050) se decodifica en `sensorFrame.js` y alimenta el
+  clasificador KNN de 22 dimensiones (`docs/etapa-6-reconocimiento.md`). Los UUID se configuran
+  desde la app y se guardan en el navegador.
 - SOS y demás módulos pendientes no simulan haber enviado nada: muestran su estado real.
 
 ---
@@ -161,6 +164,7 @@ Instrucciones completas en `public/brand/LEEME.md` y `public/illustrations/LEEME
 - `docs/etapa-2-3-entrega.md` — sistema visual y maquetación.
 - `docs/etapa-4-entrega.md` — funcionalidad, pruebas y límites honestos.
 - `docs/etapa-5-modo-real.md` — retirada del modo demostración y conexión BLE real.
+- `docs/etapa-6-reconocimiento.md` — trama de 34 bytes, vector de 22 dimensiones, KNN, entrenamiento y SOS.
 - `docs/ble-conexion.md` — guía para conectar los guantes ESP32-D/ESP32-U por BLE.
 - `docs/como-ejecutar.md` — arrancar la app, comprobar el build y resolver fallos comunes.
 - `docs/firmware/prueba-ble/prueba-ble.ino` — sketch de prueba que anuncia `KLAPS-TEST` para validar la radio BLE.
