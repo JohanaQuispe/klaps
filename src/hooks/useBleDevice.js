@@ -76,7 +76,7 @@ export function useBleDevice() {
   }, [pushLog])
 
   const connect = useCallback(
-    async ({ namePrefix, acceptAll = false } = {}) => {
+    async ({ namePrefix, acceptAll = false, extraServices = [] } = {}) => {
       setError('')
       setLogs([])
       setServices([])
@@ -85,7 +85,7 @@ export function useBleDevice() {
 
       let device
       try {
-        device = await requestGloveDevice({ namePrefix, acceptAll })
+        device = await requestGloveDevice({ namePrefix, acceptAll, extraServices })
       } catch (requestError) {
         if (requestError?.name === 'NotFoundError') {
           setStatus('idle')

@@ -187,3 +187,46 @@ UUID: { service: null, sensors: null, gesture: null }, // ← rellenar aquí
 
 `isGloveProtocolConfigured()` indica si ya se puede leer el hardware. Mientras devuelva `false`,
 la aplicación mantiene el modo demostración y lo avisa en pantalla.
+
+## 8. Si tu ESP32 no aparece en el selector
+
+### Paso 0 — la prueba decisiva
+
+Abre `chrome://bluetooth-internals` en otra pestaña y pulsa **Start Scan**. Es la herramienta
+interna de Chrome, sin relación con KLAPS:
+
+| Resultado | Significado |
+| --- | --- |
+| Tu placa **no** aparece allí | No está anunciándose por BLE. El problema es del firmware o del hardware, no de la app. |
+| Aparece allí, pero no en KLAPS | El filtro de nombre la está descartando: elige «Cualquier dispositivo BLE (sin filtro de nombre)». |
+
+### Caso A — la ventana del selector no se abre
+
+1. La dirección no es segura: debe ser `http://localhost:5173` o `https://…`.
+2. El navegador no tiene Web Bluetooth: usa Chrome, Edge u Opera. Safari y Firefox no lo tienen.
+3. El adaptador está apagado o no existe (en Windows: *Configuración → Bluetooth y dispositivos*).
+   Chrome muestra `NotFoundError` si no hay adaptador disponible.
+
+### Caso B — la ventana se abre pero tu placa no está en la lista
+
+1. **Bluetooth clásico en vez de BLE.** Si el sketch usa `BluetoothSerial` (SPP), el navegador
+   nunca lo verá. Hay que recompilar con `BLEDevice`, NimBLE o la librería `ArduinoBLE`.
+2. **No hay anuncio.** Falta `BLEDevice::startAdvertising()` o se detuvo tras una conexión
+   anterior: reinicia la placa con el botón **EN**.
+3. **Está conectada a otro central** (otro móvil, otra pestaña, una app de pruebas). Mientras tiene
+   conexión, deja de anunciarse.
+4. **La variante no tiene Bluetooth.** ESP32-S2 no incluye radio; ESP32, S3 y C3 sí (BLE).
+5. **Nombre distinto al filtro.** Una placa llamada `KLAPS-D`, `GuanteU` o `MiESP` no coincide con
+   el prefijo `ESP32`. Usa la opción sin filtro.
+
+### Caso C — conecta, pero no aparece ningún servicio
+
+Web Bluetooth solo deja leer servicios **declarados antes de conectar**. Los estándar (batería,
+información del dispositivo) ya están declarados; el servicio propio del guante hay que añadirlo:
+
+- En la pantalla de diagnóstico, tarjeta **«Servicio propio del guante»**: pega el UUID del
+  firmware y pulsa *Guardar UUID*. Se guarda en el navegador y se aplica en la siguiente conexión.
+- O en el código, en `BLE_CONFIG.optionalServices`.
+- Los UUID también se leen en `chrome://bluetooth-internals`: conecta la placa ahí y mira la
+  pestaña de servicios y características.
+

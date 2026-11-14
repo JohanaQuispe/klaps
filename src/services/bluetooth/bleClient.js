@@ -86,17 +86,31 @@ export function describeBluetoothError(error) {
  * Abre el selector de dispositivos del navegador.
  * Debe llamarse desde un clic del usuario.
  */
-export async function requestGloveDevice({ namePrefix, acceptAll = false } = {}) {
+export async function requestGloveDevice({ namePrefix, acceptAll = false, extraServices = [] } = {}) {
   if (!isWebBluetoothAvailable()) {
     throw new Error('Este navegador no admite Web Bluetooth.')
   }
 
+  /**
+   * El navegador solo permite leer los servicios declarados de antemano.
+   * `extraServices` añade los UUID propios del guante sin tocar el código.
+   */
+  const optionalServices = [...new Set([...BLE_CONFIG.optionalServices, ...extraServices])]
   const options =
     acceptAll || !namePrefix
-      ? { acceptAllDevices: true, optionalServices: BLE_CONFIG.optionalServices }
-      : { filters: [{ namePrefix }], optionalServices: BLE_CONFIG.optionalServices }
+      ? { acceptAllDevices: true, optionalServices }
+      : { filters: [{ namePrefix }], optionalServices }
 
   return navigator.bluetooth.requestDevice(options)
+}
+
+/** ¿Tiene forma de UUID de Bluetooth (16 o 128 bits)? */
+export function isValidUuid(value = '') {
+  const uuid = value.trim().toLowerCase()
+  return (
+    /^[0-9a-f]{4}$/.test(uuid) ||
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(uuid)
+  )
 }
 
 /** Convierte una característica en un objeto serializable (para la interfaz). */
