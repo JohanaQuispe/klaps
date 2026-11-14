@@ -282,3 +282,45 @@ nombre)».
 > Nota: un ESP32 sin nombre configurado puede aparecer como «Dispositivo desconocido» con solo su
 > MAC. Ese es el motivo de usar un nombre identificable en la prueba.
 
+### 8.2 El IMU llega bien, pero los cinco flex marcan 0
+
+Síntoma: en «Probar lectura de sensores» los valores `ax…gz` cambian al mover la placa, pero los
+cinco flex se quedan a 0 %. Eso significa que **la trama está bien alineada** (el IMU ocupa los
+bytes 10-33) y que los bytes 0-9 llegan a cero: el firmware está enviando ceros, no es un fallo de
+la app. Comprueba, en este orden:
+
+1. **Serial del ESP32.** Imprime los cinco valores antes de empaquetar:
+   ```cpp
+   Serial.printf("flex %d %d %d %d %d\n", flex[0], flex[1], flex[2], flex[3], flex[4]);
+   ```
+   - Si aquí ya salen 0 → el problema es la lectura del sensor (pines, ADC o divisor).
+   - Si aquí salen valores y en la app llegan 0 → el problema es el empaquetado.
+
+2. **Empaquetado de la trama.** Los flex deben ser `int16_t` little-endian en los bytes 0-9:
+   ```cpp
+   uint8_t buffer[34];
+   for (int i = 0; i < 5; i++) {
+     int16_t value = (int16_t)flexPercent[i];      // 0-100
+     memcpy(buffer + i * 2, &value, sizeof(value));
+   }
+   memcpy(buffer + 10, &imu, 24);                  // 6 × float32
+   sensors->setValue(buffer, sizeof(buffer));
+   sensors->notify();
+   ```
+   Errores frecuentes: declarar los flex como `float` o `int` (4 bytes) y empaquetarlos como si
+   fueran de 2; escribir solo 5 bytes; o copiar una estructura con relleno de alineación.
+
+3. **Hardware del flex.** Un sensor flex es una resistencia variable: necesita un **divisor**
+   (por ejemplo 10 kΩ a GND) y una entrada ADC. Con el multímetro, la tensión en el pin debe
+   cambiar al doblarlo (típicamente entre 0,5 V y 2,5 V). Si no cambia, revisa soldaduras y el pin.
+
+4. **Configuración del ADC** en ESP32:
+   ```cpp
+   analogReadResolution(12);                        // 0-4095
+   analogSetPinAttenuation(pin, ADC_11db);          // rango ~0-3,3 V
+   ```
+   Y convierte a porcentaje antes de empaquetar: `map(raw, minimo, maximo, 0, 100)`.
+
+La app muestra la **última trama en hexadecimal** separada en «flex (bytes 0-9)» e «imu (bytes
+10-33)»: si los 10 primeros bytes son `00 00 00 00 00 00 00 00 00 00`, el firmware está enviando
+ceros para los flex.
