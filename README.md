@@ -12,10 +12,15 @@ artificial para que la conversación fluya con cualquier interlocutor.
 
 ## Cómo ejecutarlo
 
+Requisitos: **Node.js 20+** y **Chrome, Edge u Opera** (Web Bluetooth no existe en Safari ni Firefox).
+
 ```bash
 npm install
 npm run dev      # http://localhost:5173
 ```
+
+Guía completa —requisitos, comprobaciones y problemas frecuentes— en
+[`docs/como-ejecutar.md`](docs/como-ejecutar.md).
 
 Otros comandos:
 
@@ -150,3 +155,4 @@ Instrucciones completas en `public/brand/LEEME.md` y `public/illustrations/LEEME
 - `docs/etapa-2-3-entrega.md` — sistema visual y maquetación.
 - `docs/etapa-4-entrega.md` — funcionalidad, pruebas y límites honestos.
 - `docs/ble-conexion.md` — guía para conectar los guantes ESP32-D/ESP32-U por BLE.
+- `docs/como-ejecutar.md` — arrancar la app, comprobar el build y resolver fallos comunes.
