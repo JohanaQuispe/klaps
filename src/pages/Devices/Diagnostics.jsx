@@ -26,6 +26,7 @@ const STATUS_LABEL = {
 
 const GLOVE_OPTIONS = [
   { value: 'cualquiera', label: 'Cualquier dispositivo BLE (sin filtro de nombre)' },
+  { value: 'klaps', label: 'Cualquier placa cuyo nombre empiece por «KLAPS»' },
   { value: 'esp32', label: 'Cualquier placa cuyo nombre empiece por «ESP32»' },
   { value: 'derecho', label: `${BLE_GLOVES.derecho.label} · ${BLE_GLOVES.derecho.board}` },
   { value: 'izquierdo', label: `${BLE_GLOVES.izquierdo.label} · ${BLE_GLOVES.izquierdo.board}` },
@@ -67,6 +68,10 @@ export default function Diagnostics() {
     // Sin filtro: aparece cualquier dispositivo BLE, se llame como se llame.
     if (target === 'cualquiera') {
       ble.connect({ acceptAll: true, extraServices })
+      return
+    }
+    if (target === 'klaps') {
+      ble.connect({ namePrefix: BLE_CONFIG.namePrefixes[0], extraServices })
       return
     }
     if (target === 'esp32') {
