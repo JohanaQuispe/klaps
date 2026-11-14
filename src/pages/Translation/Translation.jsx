@@ -93,8 +93,9 @@ export default function Translation() {
     [readings],
   )
 
-  const { live } = useGestureRecognition({
+  const { live, resting, restReason } = useGestureRecognition({
     vector: featureVector,
+    readings,
     signs,
     enabled: listening,
     availableHands,
@@ -214,6 +215,20 @@ export default function Translation() {
               · umbral {Math.round(CONFIDENCE_THRESHOLD * 100)} %
             </span>
           </div>
+          {resting && (
+            <p
+              role="status"
+              className="mt-3 rounded-md bg-lavender px-3 py-2 text-sm font-semibold text-brand-800"
+            >
+              Manos en reposo (0) — traducción pausada
+              <span className="block text-xs font-normal text-ink-soft">
+                {restReason === 'pose'
+                  ? 'Puños cerrados con la palma hacia abajo: se reanuda al abrirlos.'
+                  : 'Se reconoció la seña de pausa: se reanuda al hacer otra seña.'}
+              </span>
+            </p>
+          )}
+
           <ProgressBar
             className="mt-2"
             value={(live?.progress ?? 0) * 100}

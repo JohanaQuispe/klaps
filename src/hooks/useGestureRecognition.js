@@ -6,6 +6,7 @@ import {
   classifyTrajectory,
   flattenSamples,
 } from '../services/gesture/knnClassifier.js'
+import { isRestPose } from '../services/bluetooth/sensorFrame.js'
 import { trajectoryFromFrames } from '../services/gesture/trajectory.js'
 
 /** Bucle de clasificación: 20 Hz, igual que la frecuencia de la trama. */
@@ -19,8 +20,14 @@ export const HOLD_MS = 600
 export const DYNAMIC_CONFIRM_MS = 100
 /** Tras reconocer una seña no se repite hasta pasado este tiempo. */
 export const COOLDOWN_MS = 1500
-/** Ventana deslizante de la seña dinámica: 40 fotogramas = 2 s a 20 Hz. */
-export const DYNAMIC_WINDOW_FRAMES = 40
+/** Ventana deslizante de la seña dinámica: 80 fotogramas = 4 s a 20 Hz. */
+export const DYNAMIC_WINDOW_FRAMES = 80
+
+/**
+ * Estado «0» (reposo). Se activa con la regla física (puños cerrados hacia
+ * abajo) o al reconocer una seña entrenada con alguno de estos nombres.
+ */
+export const REST_SIGN_LABELS = /^(0|reposo|pausa)$/i
 
 const ALL_HANDS = { right: true, left: true }
 
@@ -47,8 +54,8 @@ const liveState = (result, progress, stable, mode) => ({
  * · Estáticas: cada 50 ms clasifica el fotograma y exige que la misma etiqueta
  *   se mantenga `holdMs` (600 ms) por encima del umbral.
  *
- * · Dinámicas: mantiene una ventana deslizante de 2 s (40 fotogramas),
- *   recorta el silencio de los extremos, la resume en 10 pasos clave y la
+ * · Dinámicas: mantiene una ventana deslizante de 4 s (80 fotogramas),
+ *   recorta el silencio de los extremos, la resume en 16 pasos clave y la
  *   compara con las trayectorias grabadas. Si el gesto supera el umbral y se
  *   confirma en dos ciclos, se emite de inmediato: no hay que quedarse quieto
  *   después del movimiento.
@@ -57,6 +64,7 @@ const liveState = (result, progress, stable, mode) => ({
  */
 export function useGestureRecognition({
   vector,
+  readings,
   signs,
   enabled = false,
   onRecognize,
@@ -71,6 +79,7 @@ export function useGestureRecognition({
   const samplesRef = useRef([])
   const onRecognizeRef = useRef(onRecognize)
   const handsRef = useRef(availableHands)
+  const readingsRef = useRef(readings)
   const staticCandidateRef = useRef(null)
   const dynamicCandidateRef = useRef(null)
   const bufferRef = useRef([])
@@ -78,6 +87,8 @@ export function useGestureRecognition({
 
   const [live, setLive] = useState(null)
   const [emitted, setEmitted] = useState(null)
+  // '' = traduciendo · 'pose' = regla física · 'sign' = seña 0/REPOSO/PAUSA
+  const [restReason, setRestReason] = useState('')
 
   useEffect(() => {
     vectorRef.current = vector
@@ -90,6 +101,10 @@ export function useGestureRecognition({
   useEffect(() => {
     handsRef.current = availableHands
   }, [availableHands])
+
+  useEffect(() => {
+    readingsRef.current = readings
+  }, [readings])
 
   useEffect(() => {
     samplesRef.current = flattenSamples(signs)
@@ -109,12 +124,31 @@ export function useGestureRecognition({
         hasRequiredHands(sample.handMode, hands),
       )
 
+      // ── 0. Reposo: puños cerrados hacia abajo ─────────────────────────
+      // Mientras dura, se reinicia todo y no se emite nada.
+      const enterRest = (reason) => {
+        staticCandidateRef.current = null
+        dynamicCandidateRef.current = null
+        bufferRef.current = []
+        setLive(null)
+        setRestReason(reason)
+      }
+
+      if (isRestPose(readingsRef.current)) {
+        enterRest('pose')
+        return
+      }
+
       if (!current || samples.length === 0) {
         staticCandidateRef.current = null
         dynamicCandidateRef.current = null
         setLive(null)
+        setRestReason('')
         return
       }
+
+      // Las manos se movieron: se sale del reposo y se vuelve a traducir.
+      setRestReason('')
 
       const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
       const dynamicSamples = samples.filter((sample) => sample.type === 'dynamic')
@@ -136,6 +170,12 @@ export function useGestureRecognition({
           now >= cooldownUntilRef.current
 
         if (!withinThreshold) {
+          dynamicCandidateRef.current = null
+        } else if (REST_SIGN_LABELS.test(String(dynamicResult.label).trim())) {
+          if (dynamicResult.confidence >= threshold) {
+            enterRest('sign')
+            return
+          }
           dynamicCandidateRef.current = null
         } else {
           handledByDynamic = true
@@ -175,6 +215,17 @@ export function useGestureRecognition({
       }
 
       const result = classify(current, staticSamples, K)
+
+      // Seña «0» aprendida: pausa en lugar de palabra.
+      if (
+        result &&
+        REST_SIGN_LABELS.test(String(result.label).trim()) &&
+        result.confidence >= threshold
+      ) {
+        enterRest('sign')
+        return
+      }
+
       if (!result || result.confidence < threshold) {
         staticCandidateRef.current = null
         setLive(
@@ -188,6 +239,7 @@ export function useGestureRecognition({
       const candidate = staticCandidateRef.current
       if (!candidate || candidate.label !== result.label) {
         staticCandidateRef.current = { label: result.label, since: now }
+        setRestReason('')
         setLive(liveState(result, 0, false, 'static'))
         return
       }
@@ -216,5 +268,10 @@ export function useGestureRecognition({
   }, [enabled, threshold, holdMs, dynamicConfirmMs, cooldownMs, windowFrames])
 
   // Al detener, la interfaz no debe seguir mostrando la última candidata.
-  return { live: enabled ? live : null, emitted }
+  return {
+    live: enabled ? live : null,
+    emitted,
+    resting: enabled ? Boolean(restReason) : false,
+    restReason: enabled ? restReason : '',
+  }
 }

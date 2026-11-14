@@ -24,6 +24,7 @@ import { useGestureRecognition } from '../../hooks/useGestureRecognition.js'
 import { isValidUuid } from '../../services/bluetooth/uuidSettings.js'
 import {
   CONFIDENCE_THRESHOLD,
+  DYNAMIC_STEPS,
   GESTURE_TYPE_LABELS,
   HAND_MODE_LABELS,
   flattenSamples,
@@ -101,8 +102,9 @@ export default function Training() {
     [readings],
   )
 
-  const { live } = useGestureRecognition({
+  const { live, resting, restReason } = useGestureRecognition({
     vector: featureVector,
+    readings,
     signs,
     enabled: testing,
     availableHands,
@@ -175,7 +177,7 @@ export default function Training() {
         setCapturing(false)
         setCaptureProgress(0)
         setError(
-          'No se detectó movimiento en la captura. Repite el gesto completo dentro de los 2 segundos de la ventana.',
+          'No se detectó movimiento en la captura. Repite el gesto completo dentro de los 4 segundos de la ventana.',
         )
         return
       }
@@ -190,7 +192,7 @@ export default function Training() {
     setLabel('')
     setMessage(
       gestureType === 'dynamic'
-        ? `«${name}» guardada como dinámica: 1 recorrido de ${captured.length} fotogramas resumido en 10 pasos. Repite la captura para sumar repeticiones y mejorar el acierto.`
+        ? `«${name}» guardada como dinámica: 1 recorrido de ${captured.length} fotogramas resumido en ${DYNAMIC_STEPS} pasos. Repite la captura para sumar repeticiones y mejorar el acierto.`
         : `«${name}» guardada: ${stored.length} muestras de ${HAND_MODE_LABELS[handMode].toLowerCase()}.`,
     )
   }
@@ -384,9 +386,9 @@ export default function Training() {
           Grabar nueva seña
         </h2>
         <p className="mt-1 text-sm text-ink-soft">
-          Elige qué mano y qué tipo de seña vas a grabar. Estáticas: postura fija de 1 s (
-          {STATIC_SAMPLES} fotogramas). Dinámicas: recorrido completo de 2 s ({DYNAMIC_SAMPLES}{' '}
-          fotogramas) resumido en 10 pasos clave.
+          Elige qué mano y qué tipo de seña vas a grabar. Estáticas: postura fija de 2 s (
+          {STATIC_SAMPLES} fotogramas). Dinámicas: recorrido completo de 4 s ({DYNAMIC_SAMPLES}{' '}
+          fotogramas) resumido en {DYNAMIC_STEPS} pasos clave.
         </p>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -406,8 +408,8 @@ export default function Training() {
             label="Tipo de seña"
             description={
               gestureType === 'dynamic'
-                ? `Con movimiento: ${DYNAMIC_SAMPLES} fotogramas en 2 s → 10 pasos clave.`
-                : `Postura fija: ${STATIC_SAMPLES} fotogramas en 1 s.`
+                ? `Con movimiento: ${DYNAMIC_SAMPLES} fotogramas en 4 s → ${DYNAMIC_STEPS} pasos clave.`
+                : `Postura fija: ${STATIC_SAMPLES} fotogramas en 2 s.`
             }
             options={[
               { value: 'static', label: 'Estática' },
@@ -571,6 +573,17 @@ export default function Training() {
             )}
           </div>
         </div>
+
+        {testing && resting && (
+          <p role="status" className="mt-3 rounded-md bg-lavender px-3 py-2 text-sm font-semibold text-brand-800">
+            Manos en reposo (0) — traducción pausada
+            <span className="block text-xs font-normal text-ink-soft">
+              {restReason === 'pose'
+                ? 'Regla física: 4 dedos a ≥75 % de flexión y az ≤ −7,5 m/s².'
+                : 'Seña de pausa reconocida (0, REPOSO o PAUSA).'}
+            </span>
+          </p>
+        )}
 
         {skippedSigns.length > 0 && (
           <p className="mt-3 rounded-md bg-warning-soft px-3 py-2 text-xs font-medium text-warning">

@@ -114,6 +114,39 @@ export function describeFrameContent(frame, byteLength = 0) {
   return ''
 }
 
+/**
+ * Regla física del estado «0» (reposo):
+ * los cuatro dedos principales cerrados (flex ≥ 75 %) y la palma hacia abajo
+ * (az ≤ −7,5 m/s²). Es la mitad de la activación dual; la otra mitad es que el
+ * KNN reconozca una seña llamada 0 / REPOSO / PAUSA.
+ */
+export const REST_FLEX_THRESHOLD = 75
+export const REST_ACCEL_THRESHOLD = -7.5
+export const REST_FINGERS = 4
+
+/** ¿Esta mano está cerrada y apuntando hacia abajo? */
+export function isRestHand(reading) {
+  if (!reading?.flex || !reading?.imu) return false
+
+  const fingers = reading.flex.slice(0, REST_FINGERS)
+  if (fingers.length < REST_FINGERS) return false
+
+  const closed = fingers.every((value) => Number.isFinite(value) && value >= REST_FLEX_THRESHOLD)
+  const pointingDown = Number.isFinite(reading.imu.az) && reading.imu.az <= REST_ACCEL_THRESHOLD
+
+  return closed && pointingDown
+}
+
+/**
+ * ¿Las manos están en reposo? Se evalúan solo los guantes que envían datos y
+ * todos deben cumplir la regla: así se puede seguir firmando con una mano
+ * mientras la otra descansa... salvo que ambas estén cerradas.
+ */
+export function isRestPose({ derecho, izquierdo } = {}) {
+  const hands = [derecho, izquierdo].filter(Boolean)
+  return hands.length > 0 && hands.every(isRestHand)
+}
+
 /** ¿Hay al menos un guante enviando datos válidos? */
 export function hasAnyReading({ derecho, izquierdo } = {}) {
   return Boolean(derecho || izquierdo)

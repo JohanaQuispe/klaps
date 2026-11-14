@@ -35,7 +35,7 @@ el mismo clasificador sirve en modo unimanual.
 1. Distancia euclidiana contra **todas** las muestras guardadas.
 2. Se toman los 3 vecinos más cercanos.
 3. Voto ponderado por cercanía (`1 / (distancia + ε)`): un vecino próximo pesa más.
-4. Confianza = peso del ganador × unanimidad × **similitud absoluta**.
+4. Confianza = **margen entre etiquetas** × **similitud absoluta** (ver etapa 7).
 
 La similitud absoluta (`similarityFromDistance`) evita el falso positivo clásico del KNN: con una
 sola muestra por seña, el reparto de votos daría 100 % aunque la postura no se pareciera en nada.

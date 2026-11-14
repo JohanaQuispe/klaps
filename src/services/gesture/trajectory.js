@@ -1,16 +1,21 @@
 /**
  * Trayectorias para señas dinámicas.
  *
- * Una seña con movimiento se graba durante 2 segundos (40 fotogramas a 20 Hz).
+ * Una seña con movimiento se graba durante 4 segundos (80 fotogramas a 20 Hz).
  * De esa ventana se recorta el silencio de los extremos y se submuestrea a
- * `DYNAMIC_STEPS` pasos clave (10 por defecto): el resultado es un vector de
- * 10 × 22 = 220 dimensiones comparable con `classifyTrajectory`.
+ * `DYNAMIC_STEPS` pasos clave (16 por defecto): el resultado es un vector de
+ * 16 × 22 = 352 dimensiones comparable con `classifyTrajectory`.
  */
 
 import { DYNAMIC_STEPS, FEATURE_SIZE } from './knnClassifier.js'
 
-/** Movimiento mínimo (unidades normalizadas 0-100) para considerar que hay gesto. */
-export const MOTION_FLOOR = 1.2
+/**
+ * Movimiento mínimo entre dos fotogramas (unidades normalizadas 0-100) para
+ * considerar que hay gesto. Con ventanas de 4 s un gesto suave avanza poco
+ * entre fotogramas, así que el umbral es bajo: el ruido de los sensores queda
+ * por debajo de 0,5.
+ */
+export const MOTION_FLOOR = 0.6
 /** Fragmento proporcional del pico que también cuenta como movimiento. */
 const MOTION_RATIO = 0.15
 /** Con menos fotogramas no hay trayectoria fiable. */
@@ -97,6 +102,35 @@ export function trajectoryFromFrames(frames = [], { floor = MOTION_FLOOR, steps 
   const segment = trimMovement(frames, floor)
   if (segment.length < MIN_TRAJECTORY_FRAMES) return null
   return buildTrajectory(segment, steps)
+}
+
+/**
+ * Cambia el número de pasos clave de una trayectoria (interpolación lineal).
+ * Sirve para reutilizar entrenamientos grabados con 10 pasos cuando ahora se
+ * comparan 16, sin perder lo ya grabado.
+ */
+export function resampleTrajectory(vector, targetSteps = DYNAMIC_STEPS) {
+  if (!Array.isArray(vector) || vector.length === 0) return null
+  if (vector.length % FEATURE_SIZE !== 0) return null
+
+  const steps = vector.length / FEATURE_SIZE
+  if (steps === targetSteps) return vector.slice()
+
+  const result = []
+  for (let step = 0; step < targetSteps; step += 1) {
+    const position = targetSteps === 1 ? 0 : (step * (steps - 1)) / (targetSteps - 1)
+    const lower = Math.floor(position)
+    const upper = Math.min(steps - 1, lower + 1)
+    const blend = position - lower
+
+    for (let index = 0; index < FEATURE_SIZE; index += 1) {
+      const a = vector[lower * FEATURE_SIZE + index]
+      const b = vector[upper * FEATURE_SIZE + index]
+      result.push(a + (b - a) * blend)
+    }
+  }
+
+  return result
 }
 
 /** ¿La ventana contiene un gesto con movimiento suficiente? */
