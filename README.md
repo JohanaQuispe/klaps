@@ -159,3 +159,4 @@ Instrucciones completas en `public/brand/LEEME.md` y `public/illustrations/LEEME
 - `docs/etapa-4-entrega.md` — funcionalidad, pruebas y límites honestos.
 - `docs/ble-conexion.md` — guía para conectar los guantes ESP32-D/ESP32-U por BLE.
 - `docs/como-ejecutar.md` — arrancar la app, comprobar el build y resolver fallos comunes.
+- `docs/firmware/prueba-ble/prueba-ble.ino` — sketch de prueba que anuncia `KLAPS-TEST` para validar la radio BLE.

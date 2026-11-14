@@ -230,3 +230,29 @@ información del dispositivo) ya están declarados; el servicio propio del guant
 - Los UUID también se leen en `chrome://bluetooth-internals`: conecta la placa ahí y mira la
   pestaña de servicios y características.
 
+### 8.1 Prueba de radio con un sketch mínimo
+
+Si en `chrome://bluetooth-internals` aparecen televisiones, altavoces y móviles pero **no tu
+placa**, el escaneo funciona: lo que falta es que el ESP32 anuncie. Para descartar el firmware
+propio, sube el sketch de prueba:
+
+**`docs/firmware/prueba-ble/prueba-ble.ino`**
+
+- Anuncia el nombre **`KLAPS-TEST`**, que es fácil de localizar en la lista.
+- Publica el servicio `6e400001-b5a3-f393-e0a9-e50e24dcca9e` y la batería estándar al 87 %.
+- Envía un contador cada segundo: sirve para comprobar que las notificaciones llegan.
+- **No lee sensores**: solo valida la radio y el GATT.
+
+Pasos: Arduino IDE → placa «ESP32 Dev Module» → subir → Monitor Serie a 115200 → debe imprimir
+`Anunciando como KLAPS-TEST`. Después, en KLAPS, elige «Cualquier dispositivo BLE (sin filtro de
+nombre)».
+
+| Resultado con el sketch de prueba | Conclusión |
+| --- | --- |
+| Aparece y conecta | La radio y el navegador están bien: el problema está en tu sketch real. |
+| No aparece ni en bluetooth-internals | Revisa la placa elegida en el IDE y el modelo del módulo (ESP32-S2 no tiene radio). |
+| Aparece pero KLAPS no lo ve | Actualiza a la versión con el selector sin filtro. |
+
+> Nota: un ESP32 sin nombre configurado puede aparecer como «Dispositivo desconocido» con solo su
+> MAC. Ese es el motivo de usar un nombre identificable en la prueba.
+
