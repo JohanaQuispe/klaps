@@ -1,39 +1,45 @@
 /**
  * Emergencias SOS.
  *
- * IMPORTANTE · Todavía NO existe integración con un servicio de emergencias.
- * `sendAlert` devuelve siempre `delivered: false` y la interfaz lo muestra
- * tal cual: nunca se simula una alerta enviada.
+ * El envío real usa Telegram (Bot API) a través de `services/emergency/telegram.js`:
+ * no hay backend propio, el token del bot y el destino viven en este navegador.
  *
- * Cuando exista el servicio real (API, SMS o llamada), se sustituye el
- * cuerpo de `sendAlert` y se mantiene el mismo contrato de respuesta.
+ * Si Telegram no está configurado, `sendAlert` devuelve `delivered: false` con el
+ * motivo: la interfaz lo muestra tal cual. Nunca se simula una alerta enviada.
  */
 
+import { isTelegramConfigured, sendTelegramMessage } from './telegram.js'
+
 export const EMERGENCY_SERVICE = {
-  available: false,
-  provider: null,
+  provider: 'telegram',
+  name: 'Telegram',
   reason:
-    'Todavía no hay un servicio de emergencias conectado a KLAPS. La alerta se prepara, pero no se envía.',
+    'Configura tu bot de Telegram en esta pantalla para que la alerta llegue a tu contacto.',
 }
 
-/** Texto que se prepararía para enviar a un contacto o servicio. */
-export function buildAlertMessage({ contactName, location, gesture = null }) {
-  const lines = [
-    'ALERTA KLAPS',
-    contactName ? `Para: ${contactName}` : 'Para: contacto de emergencia',
-    'Necesito ayuda inmediata.',
-  ]
+/** ¿Hay un canal real conectado? */
+export function isEmergencyChannelReady(telegram) {
+  return isTelegramConfigured(telegram)
+}
 
-  if (gesture) lines.push(`Activada con el gesto: ${gesture}.`)
+/** Texto que se envía al contacto. */
+export function buildAlertMessage({ contactName, location, gesture = null, repeats = 0, at = Date.now() }) {
+  const lines = ['ALERTA KLAPS · EMERGENCIA', 'Necesito ayuda inmediata.']
+
+  if (contactName) lines.push(`Para: ${contactName}`)
+  if (repeats > 0) lines.push(`Activada con ${repeats} señas de SOS.`)
+  if (gesture) lines.push(`Gesto: ${gesture}.`)
+
   if (location) {
     lines.push(
-      `Ubicación aproximada: ${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)} (±${Math.round(location.accuracy)} m).`,
+      `Ubicación: ${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)} (±${Math.round(location.accuracy ?? 0)} m).`,
     )
+    lines.push(`https://www.google.com/maps?q=${location.latitude},${location.longitude}`)
   } else {
     lines.push('Ubicación: no disponible (sin autorización).')
   }
 
-  lines.push(`Hora: ${new Date().toLocaleString('es')}`)
+  lines.push(`Hora: ${new Date(at).toLocaleString('es')}`)
   return lines.join('\n')
 }
 
@@ -72,14 +78,40 @@ export function requestLocation({ timeout = 9000 } = {}) {
 }
 
 /**
- * Intento de envío. Devuelve el estado REAL, no un éxito simulado.
+ * Envío real. Devuelve el estado verdadero, no un éxito simulado.
+ *
+ * @param {{message: string, contact?: object, telegram?: object}} params
  */
-export async function sendAlert({ message, contact }) {
+export async function sendAlert({ message, contact = null, telegram = null }) {
+  const attemptedAt = Date.now()
+
+  if (!isTelegramConfigured(telegram)) {
+    return {
+      delivered: false,
+      channel: 'ninguno',
+      reason:
+        'No hay ningún canal conectado todavía. Configura tu bot de Telegram y el contacto en la pantalla de emergencia: sin eso, la alerta no sale de este dispositivo.',
+      attemptedAt,
+      message,
+    }
+  }
+
+  const response = await sendTelegramMessage({
+    token: telegram.token,
+    chatId: telegram.chatId,
+    text: message,
+  })
+
   return {
-    delivered: false,
-    reason: EMERGENCY_SERVICE.reason,
-    attemptedAt: Date.now(),
-    channel: contact?.phone ? 'telefono' : 'ninguno',
+    delivered: response.delivered,
+    channel: 'telegram',
+    reason: response.delivered
+      ? `Enviada por Telegram a ${telegram.chatName || telegram.chatId}.`
+      : response.reason,
+    messageId: response.messageId,
+    attemptAt: attemptedAt,
+    attemptedAt,
+    contact,
     message,
   }
 }

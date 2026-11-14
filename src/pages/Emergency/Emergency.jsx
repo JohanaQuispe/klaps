@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Copy, MapPin, Phone, Save, ShieldAlert, Siren } from 'lucide-react'
+import { Copy, MapPin, MessageCircle, Phone, Save, Search, Send, ShieldAlert, Siren, Trash2 } from 'lucide-react'
 import PageHeader from '../../components/layout/PageHeader'
 import Card from '../../components/common/Card'
 import Button from '../../components/common/Button'
@@ -11,11 +11,22 @@ import { useAccessibility } from '../../context/accessibilityContext.js'
 import { EMERGENCY_GESTURES } from '../../context/accessibilityOptions.js'
 import { useClipboard } from '../../hooks/useClipboard.js'
 import {
-  EMERGENCY_SERVICE,
   buildAlertMessage,
+  isEmergencyChannelReady,
   requestLocation,
   sendAlert,
 } from '../../services/emergency/sos.js'
+import {
+  clearTelegramConfig,
+  fetchTelegramChats,
+  isValidChatId,
+  isValidToken,
+  loadTelegramConfig,
+  normalizeChatId,
+  normalizeToken,
+  saveTelegramConfig,
+  sendTelegramTest,
+} from '../../services/emergency/telegram.js'
 
 const COUNTDOWN_START = 5
 
@@ -33,6 +44,18 @@ export default function Emergency() {
   const [contactName, setContactName] = useState(preferences.emergencyContact?.name ?? '')
   const [contactPhone, setContactPhone] = useState(preferences.emergencyContact?.phone ?? '')
   const [contactSaved, setContactSaved] = useState(false)
+
+  // ── Telegram ──
+  const [telegram, setTelegram] = useState(loadTelegramConfig)
+  const [tokenInput, setTokenInput] = useState(() => loadTelegramConfig().token)
+  const [chatInput, setChatInput] = useState(() => loadTelegramConfig().chatId)
+  const [chats, setChats] = useState([])
+  const [telegramMessage, setTelegramMessage] = useState('')
+  const [telegramError, setTelegramError] = useState('')
+  const [searching, setSearching] = useState(false)
+  const [testingSend, setTestingSend] = useState(false)
+
+  const channelReady = isEmergencyChannelReady(telegram)
 
   const gestureLabel =
     EMERGENCY_GESTURES.find((item) => item.value === preferences.emergencyGesture)?.label ?? ''
@@ -64,11 +87,12 @@ export default function Emergency() {
     const response = await sendAlert({
       message,
       contact: preferences.emergencyContact,
+      telegram,
     })
 
     setResult({ ...response, message, location: currentLocation, locationError: locationMessage })
     setPhase('idle')
-  }, [location, locationError, preferences, gestureLabel])
+  }, [location, locationError, preferences, gestureLabel, telegram])
 
   // Cuenta atrás antes de preparar la alerta (el disparo ocurre en el temporizador,
   // no de forma síncrona durante el render)
@@ -101,6 +125,88 @@ export default function Emergency() {
     window.setTimeout(() => setContactSaved(false), 2500)
   }
 
+  const saveTelegram = () => {
+    const token = normalizeToken(tokenInput)
+    const chatId = normalizeChatId(chatInput)
+
+    if (!isValidToken(token)) {
+      setTelegramError('El token no tiene el formato correcto. Cópialo de @BotFather: 123456789:AA…')
+      return
+    }
+    if (!isValidChatId(chatId)) {
+      setTelegramError('Pulsa «Buscar contactos» y elige uno, o escribe el ID numérico del chat.')
+      return
+    }
+
+    const next = {
+      token,
+      chatId,
+      chatName: chats.find((chat) => chat.id === chatId)?.name ?? '',
+    }
+    setTelegram(saveTelegramConfig(next))
+    setTelegramError('')
+    setTelegramMessage('Telegram guardado: la alerta SOS se enviará a este chat.')
+  }
+
+  const removeTelegram = () => {
+    setTelegram(clearTelegramConfig())
+    setTokenInput('')
+    setChatInput('')
+    setChats([])
+    setTelegramError('')
+    setTelegramMessage('Configuración de Telegram eliminada de este navegador.')
+  }
+
+  const searchChats = async () => {
+    const token = normalizeToken(tokenInput)
+    if (!isValidToken(token)) {
+      setTelegramError('Escribe primero el token del bot para buscar contactos.')
+      return
+    }
+
+    setSearching(true)
+    setTelegramError('')
+    setTelegramMessage('')
+
+    const response = await fetchTelegramChats(token)
+    setSearching(false)
+
+    if (!response.ok) {
+      setTelegramError(response.error)
+      return
+    }
+
+    setChats(response.chats)
+    if (response.chats.length === 0) {
+      setTelegramError(response.error)
+    } else {
+      setTelegramMessage(`Se encontraron ${response.chats.length} chats que escribieron al bot.`)
+    }
+  }
+
+  const testTelegram = async () => {
+    const config = { token: normalizeToken(tokenInput), chatId: normalizeChatId(chatInput) }
+
+    if (!isValidToken(config.token) || !isValidChatId(config.chatId)) {
+      setTelegramError('Guarda antes el token y el contacto de Telegram.')
+      return
+    }
+
+    setTestingSend(true)
+    setTelegramError('')
+    setTelegramMessage('Enviando mensaje de prueba…')
+
+    const response = await sendTelegramTest(config)
+    setTestingSend(false)
+
+    if (response.delivered) {
+      setTelegramMessage('Prueba enviada: revisa el chat del contacto en Telegram.')
+    } else {
+      setTelegramMessage('')
+      setTelegramError(response.reason)
+    }
+  }
+
   const testLocation = async () => {
     setLocating(true)
     setLocationError('')
@@ -116,14 +222,19 @@ export default function Emergency() {
         eyebrow="Emergencia"
         title="Emergencia SOS"
         description="Pide ayuda en dos pasos, con confirmación previa. KLAPS nunca envía nada sin tu permiso."
-        actions={<StatusBadge status="pendiente" label="Servicio no conectado" />}
+        actions={
+          <StatusBadge
+            status={channelReady ? 'conectado' : 'pendiente'}
+            label={channelReady ? 'Telegram conectado' : 'Sin canal conectado'}
+          />
+        }
       />
 
-      {!EMERGENCY_SERVICE.available && (
+      {!channelReady && (
         <ErrorMessage
           className="mb-5"
-          title="El envío de alertas todavía no está disponible"
-          description="KLAPS puede preparar el mensaje, mostrar tu ubicación y darte acceso al teléfono, pero no existe aún un servicio de emergencias conectado. Nada se envía automáticamente."
+          title="Todavía no hay un canal conectado"
+          description="Configura tu bot de Telegram y elige el contacto más abajo. Sin eso KLAPS prepara el mensaje pero no lo envía: nunca se simula una alerta enviada."
         />
       )}
 
@@ -166,7 +277,13 @@ export default function Emergency() {
             <ShieldAlert className="mt-0.5 size-6 shrink-0 text-warning" aria-hidden="true" />
             <div className="min-w-0">
               <p className="font-display text-lg font-extrabold text-brand-800">
-                Alerta preparada, <span className="text-warning">no enviada</span>
+                {result.delivered ? (
+                  <span className="text-success">Alerta enviada por Telegram</span>
+                ) : (
+                  <>
+                    Alerta preparada, <span className="text-warning">no enviada</span>
+                  </>
+                )}
               </p>
               <p className="mt-1 text-sm text-ink">{result.reason}</p>
 
@@ -307,6 +424,129 @@ export default function Emergency() {
           </p>
         </Card>
 
+        {/* Alerta por Telegram */}
+        <Card padding="lg" className="lg:col-span-2">
+          <h2 className="flex items-center gap-2 font-display text-lg font-extrabold text-brand-800">
+            <MessageCircle className="size-5 text-brand-600" aria-hidden="true" />
+            Alerta por Telegram
+          </h2>
+          <p className="mt-1 text-sm text-ink-soft">
+            El mensaje de emergencia se envía desde tu propio bot de Telegram. Se configura una vez y
+            queda guardado solo en este navegador.
+          </p>
+
+          <ol className="mt-3 grid gap-1.5 rounded-md bg-brand-50 px-3 py-2.5 text-xs text-ink-soft">
+            <li>
+              <span className="font-semibold text-brand-800">1.</span> Abre Telegram, busca{' '}
+              <strong className="text-ink">@BotFather</strong> y envía <code>/newbot</code>. Copia el
+              token que te da.
+            </li>
+            <li>
+              <span className="font-semibold text-brand-800">2.</span> Tu contacto debe abrir ese bot
+              y enviarle <code>/start</code> una vez (Telegram no permite escribir a un número sin
+              eso).
+            </li>
+            <li>
+              <span className="font-semibold text-brand-800">3.</span> Pega el token, pulsa{' '}
+              <strong className="text-ink">Buscar contactos</strong> y elige a quién avisar.
+            </li>
+          </ol>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div>
+              <label htmlFor="telegram-token" className="text-sm font-semibold text-ink">
+                Token del bot
+              </label>
+              <input
+                id="telegram-token"
+                type="password"
+                autoComplete="off"
+                spellCheck="false"
+                value={tokenInput}
+                onChange={(event) => setTokenInput(event.target.value)}
+                placeholder="123456789:AA…"
+                className="mt-1 min-h-12 w-full rounded-md border border-brand-200 bg-white px-3 font-mono text-sm text-ink placeholder:text-ink-soft/70"
+              />
+            </div>
+            <div>
+              <label htmlFor="telegram-chat" className="text-sm font-semibold text-ink">
+                Contacto (ID del chat)
+              </label>
+              <input
+                id="telegram-chat"
+                type="text"
+                inputMode="numeric"
+                spellCheck="false"
+                value={chatInput}
+                onChange={(event) => setChatInput(event.target.value)}
+                placeholder="123456789"
+                className="mt-1 min-h-12 w-full rounded-md border border-brand-200 bg-white px-3 font-mono text-sm text-ink placeholder:text-ink-soft/70"
+              />
+            </div>
+          </div>
+
+          {chats.length > 0 && (
+            <div className="mt-3">
+              <p className="text-sm font-semibold text-ink">Chats que escribieron al bot</p>
+              <ul className="mt-2 flex flex-wrap gap-2">
+                {chats.map((chat) => (
+                  <li key={chat.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setChatInput(chat.id)
+                        setTelegramError('')
+                      }}
+                      className={
+                        chatInput === chat.id
+                          ? 'min-h-10 rounded-full bg-brand-600 px-3 text-sm font-semibold text-white'
+                          : 'min-h-10 rounded-full bg-brand-50 px-3 text-sm font-semibold text-brand-700 hover:bg-lavender'
+                      }
+                    >
+                      {chat.name}
+                      {chat.username ? ` ${chat.username}` : ''} · {chat.id}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="secondary" icon={Search} onClick={searchChats} disabled={searching}>
+              {searching ? 'Buscando…' : 'Buscar contactos'}
+            </Button>
+            <Button size="sm" icon={Save} onClick={saveTelegram}>
+              Guardar Telegram
+            </Button>
+            <Button size="sm" variant="secondary" icon={Send} onClick={testTelegram} disabled={testingSend}>
+              {testingSend ? 'Enviando…' : 'Enviar prueba'}
+            </Button>
+            {telegram.token && (
+              <Button size="sm" variant="ghost" icon={Trash2} onClick={removeTelegram}>
+                Quitar
+              </Button>
+            )}
+          </div>
+
+          <p aria-live="polite" className="mt-3 text-sm font-semibold text-success">
+            {telegramMessage}
+          </p>
+
+          {telegramError && (
+            <p role="alert" className="mt-2 rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
+              {telegramError}
+            </p>
+          )}
+
+          <p className="mt-3 rounded-md bg-white/70 px-3 py-2 text-xs text-ink-soft">
+            <strong className="text-ink">Seguridad:</strong> el token se guarda en este navegador y
+            cualquiera con acceso a este equipo podría leerlo. Crea un bot solo para KLAPS y no lo
+            compartas. La alerta se marca como enviada únicamente cuando Telegram responde
+            correctamente.
+          </p>
+        </Card>
+
         {/* Ubicación */}
         <Card padding="lg" className="lg:col-span-2">
           <h2 className="font-display text-lg font-extrabold text-brand-800">Ubicación</h2>
@@ -407,7 +647,12 @@ export default function Emergency() {
               {preferences.shareLocation ? 'se incluirá' : 'no se incluirá'}; puedes cambiarlo en esta
               misma pantalla.
             </li>
-            <li>· El envío real no está disponible: la alerta se prepara y se muestra.</li>
+            <li>
+              · El envío {channelReady ? 'se hará por Telegram' : 'no saldrá de este dispositivo'}:{' '}
+              {channelReady
+                ? `llegará a ${telegram.chatName || telegram.chatId}.`
+                : 'falta configurar el canal en esta pantalla.'}
+            </li>
           </ul>
         )}
 
