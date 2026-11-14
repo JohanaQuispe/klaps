@@ -101,6 +101,19 @@ en mayúsculas; se normalizan al guardar. Desde:
 Con ambos guardados, `DeviceProvider` se suscribe automáticamente a la característica de sensores
 al conectar cada guante.
 
+> **Importante:** el servicio debe declararse **antes** de abrir la conexión (`optionalServices`).
+> Por eso `connect()` añade el UUID del servicio a la petición del navegador. Si aun así falla,
+> en la tarjeta del guante aparece **«Activar sensores»** y el motivo del error.
+
+### Estado de sensores en la tarjeta del guante
+
+| Indicador | Significado |
+| --- | --- |
+| «Escuchando · N tramas» | Suscripción activa y paquetes entrantes |
+| «Recibiendo la trama de 34 bytes» | El tamaño coincide con el protocolo |
+| «Trama de N bytes; se esperaban 34» | El firmware envía otra estructura: revisa el orden y los tipos |
+| «Sin suscribir» | Falta configurar UUID o la suscripción falló (se indica el motivo) |
+
 ## 10. Cómo probarlo
 
 1. `http://localhost:5173/dispositivos/diagnostico` → conecta `KLAPS_Guante_D` → «Copiar UUID».

@@ -143,6 +143,11 @@ void loop() {
 }
 ```
 
+> La batería que muestra la app es **la que publica el firmware** (servicio `0x180F`). Si tu sketch
+> escribe un valor fijo —`battery->setValue((uint8_t)95)`—, la app mostrará siempre ese 95 %:
+> no es una lectura inventada por la app. Para que sea real hay que leer el ADC del divisor de
+> tensión y convertir la medida a porcentaje.
+
 ### Batería (opcional pero recomendado)
 
 Con el servicio estándar `0x180F` y la característica `0x2A19` (nivel, uint8 0-100), la app
@@ -175,6 +180,12 @@ Puedes obtener los tres primeros puntos sin tocar código: conecta la placa en
   implementa Web Bluetooth). La alternativa sería una app nativa.
 - **Sin emparejamiento previo**: no se puede reconectar solo con el identificador. El usuario
   vuelve a elegir el dispositivo en cada sesión; Chrome recuerda los que ya autorizaste.
+
+## 7.1 Leer el RSSI en la app (opcional)
+
+Web Bluetooth no expone el RSSI de una conexión abierta, así que si quieres verlo en pantalla el
+firmware debe publicarlo como característica propia (por ejemplo `int8` con los dBm). La app puede
+mostrarlo igual que los sensores en cuanto se añada al vector de lectura.
 
 ## 7. Configuración en el código
 

@@ -16,7 +16,7 @@ import {
 } from '../../services/bluetooth/bleClient.js'
 
 export default function Devices() {
-  const { gloves, disconnect, connect } = useDevices()
+  const { gloves, disconnect, connect, subscribeSensors, protocolConfigured } = useDevices()
   const [infoGlove, setInfoGlove] = useState(null)
 
   const connectedCount = gloves.filter((glove) => glove.status === GLOVE_STATUS.CONECTADO).length
@@ -68,6 +68,8 @@ export default function Devices() {
             glove={glove}
             onDisconnect={disconnect}
             onReconnect={connect}
+            onSubscribe={subscribeSensors}
+            sensorsConfigured={protocolConfigured}
             onRequestConnect={setInfoGlove}
           />
         ))}

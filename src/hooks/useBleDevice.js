@@ -167,8 +167,19 @@ export function useBleDevice() {
         )
         unsubscribersRef.current.push(unsubscribe)
         setSubscriptions((previous) => [...previous, key])
+        setError('')
       } catch (subscribeError) {
-        setError(describeBluetoothError(subscribeError))
+        if (subscribeError?.name === 'SecurityError') {
+          setError(
+            'El navegador no autorizó ese servicio porque no se declaró antes de conectar. Desconecta el guante y vuelve a conectarlo.',
+          )
+        } else if (subscribeError?.name === 'NotFoundError') {
+          setError('El guante no publica ese servicio o característica. Revisa los UUID guardados.')
+        } else if (subscribeError?.name === 'NotSupportedError') {
+          setError('Esa característica no admite notificaciones (notify). Solo se puede leer.')
+        } else {
+          setError(describeBluetoothError(subscribeError))
+        }
       }
     },
     [pushLog, subscriptions],

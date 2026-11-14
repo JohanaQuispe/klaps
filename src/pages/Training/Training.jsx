@@ -249,7 +249,8 @@ export default function Training() {
             >
               <span className="font-semibold text-ink">{glove.label}</span>
               <span className="text-xs text-ink-soft">
-                {glove.status} · {glove.frames} tramas
+                {glove.status} · {glove.frames} tramas ·{' '}
+                {glove.sensorsListening ? 'escuchando' : 'sin suscribir'}
               </span>
             </li>
           ))}
@@ -271,7 +272,9 @@ export default function Training() {
 
         {!hasReadings ? (
           <p className="mt-2 text-sm text-ink-soft">
-            Sin datos todavía. Conecta un guante y espera a que empiece a enviar tramas.
+            Sin datos todavía. Conecta un guante y espera a que empiece a enviar tramas. Si aparece
+            «sin suscribir», pulsa «Guardar UUID» y vuelve a conectar: el navegador exige declarar el
+            servicio <em>antes</em> de abrir la conexión.
           </p>
         ) : (
           <div className="mt-3 grid gap-4 sm:grid-cols-2">
