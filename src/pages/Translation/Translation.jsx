@@ -30,6 +30,7 @@ import { useHistory } from '../../context/historyContext.js'
 import { useAppSpeech } from '../../hooks/useAppSpeech.js'
 import { useClipboard } from '../../hooks/useClipboard.js'
 import { useGestureRecognition } from '../../hooks/useGestureRecognition.js'
+import { useHelpSignal } from '../../hooks/useHelpSignal.js'
 import { CONFIDENCE_THRESHOLD } from '../../services/gesture/knnClassifier.js'
 import { improveSentence } from '../../services/gesture/sentence.js'
 import { loadTraining } from '../../services/gesture/trainingStore.js'
@@ -40,6 +41,7 @@ import {
   sendAlert,
 } from '../../services/emergency/sos.js'
 import { loadTelegramConfig } from '../../services/emergency/telegram.js'
+import { HELP_MIN_IMPULSES } from '../../services/emergency/helpSignal.js'
 import { formatRelativeTime } from '../../utils/format.js'
 
 /** Etiquetas que disparan el flujo de emergencia. */
@@ -50,6 +52,8 @@ export const SOS_REPEATS = 3
 export const SOS_WINDOW_MS = 15000
 /** Margen para cancelar antes del envío automático. */
 export const SOS_COUNTDOWN_SECONDS = 10
+/** Nombre con el que se anuncia la seña física de auxilio (agitar el guante). */
+export const HELP_SIGNAL_LABEL = 'Auxilio'
 
 export default function Translation() {
   const { entries, addEntry } = useHistory()
@@ -118,6 +122,29 @@ export default function Translation() {
     }
   }, [channelReady, preferences.shareLocation, speak])
 
+  /**
+   * Suma una repetición de la seña de emergencia. Lo usan los dos caminos:
+   * la seña entrenada que reconoce el KNN y la seña física de auxilio
+   * (`useHelpSignal`), que no necesita entrenamiento.
+   */
+  const registerEmergencyRepeat = useCallback(
+    (label, origin) => {
+      // Tres repeticiones dentro de la ventana disparan la alerta.
+      const now = Date.now()
+      const times = [...sosTimesRef.current, now].filter((time) => now - time <= SOS_WINDOW_MS)
+      sosTimesRef.current = times
+      setSosCount(times.length)
+      setSosSign({ label, origin, at: now, count: times.length })
+
+      if (times.length >= SOS_REPEATS) {
+        sosTimesRef.current = []
+        setSosCount(0)
+        openSosPrompt()
+      }
+    },
+    [openSosPrompt],
+  )
+
   const handleRecognize = useCallback(
     (result) => {
       const label = result.label.trim()
@@ -128,25 +155,14 @@ export default function Translation() {
       setCorrectionNotes([])
 
       if (SOS_LABELS.test(label)) {
-        // Tres repeticiones dentro de la ventana disparan la alerta.
-        const now = Date.now()
-        const times = [...sosTimesRef.current, now].filter((time) => now - time <= SOS_WINDOW_MS)
-        sosTimesRef.current = times
-        setSosCount(times.length)
-        setSosSign({ label, at: now, count: times.length })
-
-        if (times.length >= SOS_REPEATS) {
-          sosTimesRef.current = []
-          setSosCount(0)
-          openSosPrompt()
-        }
+        registerEmergencyRepeat(label, 'sign')
         return
       }
 
       setWords((previous) => [...previous, label])
       speak(label)
     },
-    [openSosPrompt, speak],
+    [registerEmergencyRepeat, speak],
   )
 
   // Si un guante no envía datos, sus señas no se evalúan (evita falsos positivos con ceros).
@@ -162,6 +178,19 @@ export default function Translation() {
     enabled: listening,
     availableHands,
     onRecognize: handleRecognize,
+  })
+
+  // Seña física de auxilio: agitar el guante. No depende de señas entrenadas
+  // ni de los flex, así que también funciona con el guante como está hoy.
+  const handleHelpSignal = useCallback(
+    () => registerEmergencyRepeat(HELP_SIGNAL_LABEL, 'physical'),
+    [registerEmergencyRepeat],
+  )
+
+  const helpSignal = useHelpSignal({
+    readings,
+    enabled: listening,
+    onSignal: handleHelpSignal,
   })
 
   const sendSos = useCallback(async () => {
@@ -251,12 +280,12 @@ export default function Translation() {
           <div>
             <p className="font-display font-bold text-brand-800">Todavía no hay señas entrenadas</p>
             <p className="mt-1 text-sm text-ink">
-              El reconocimiento necesita muestras. Graba cada seña 20 veces con las manos en la
-              postura correcta desde el{' '}
+              Las palabras necesitan muestras: graba cada seña 20 veces desde el{' '}
               <Link to="/entrenamiento" className="font-semibold text-brand-700 underline underline-offset-2">
                 panel de entrenamiento
               </Link>
-              .
+              . La <strong className="font-semibold text-ink">seña física de auxilio</strong> (agitar
+              el guante tres veces) ya funciona sin entrenar nada.
             </p>
           </div>
         </Card>
@@ -321,6 +350,28 @@ export default function Translation() {
             </p>
           )}
 
+          {/* Seña física de auxilio: agitar el guante. Funciona sin entrenamiento. */}
+          {listening && (
+            <div className="mt-3 rounded-md border border-danger/25 bg-danger-soft/40 px-3 py-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span className="font-semibold text-ink">Seña física de auxilio</span>
+                <span className="text-xs text-ink-soft">
+                  {helpSignal.impulses > 0
+                    ? `Vaivén en curso (${Math.min(helpSignal.impulses, HELP_MIN_IMPULSES)} de ${HELP_MIN_IMPULSES} impulsos)`
+                    : 'Agita el guante de lado a lado'}
+                </span>
+              </div>
+              <ProgressBar
+                className="mt-2"
+                value={helpSignal.level * 100}
+                label="Movimiento del MPU-6050"
+                valueLabel={helpSignal.level >= 0.4 ? 'Detectando' : 'Quieto'}
+                tone={helpSignal.level >= 0.4 ? 'danger' : 'brand'}
+                size="sm"
+              />
+            </div>
+          )}
+
           {resting && (
             <p
               role="status"
@@ -361,7 +412,7 @@ export default function Translation() {
               size="lg"
               icon={Play}
               onClick={() => setListening(true)}
-              disabled={!hasReadings || signs.length === 0}
+              disabled={!hasReadings}
             >
               Iniciar detección
             </Button>
@@ -437,8 +488,9 @@ export default function Translation() {
             <div>
               <p className="font-display font-bold text-danger">Seña de emergencia detectada</p>
               <p className="mt-1 text-sm text-ink">
-                Se reconoció «{sosSign.label}» ({sosSign.count ?? 1} de {SOS_REPEATS}). Repite la seña{' '}
-                {SOS_REPEATS} veces en 15 segundos para que la alerta se envíe sola
+                {sosSign.origin === 'physical'
+                  ? `Vaivén de auxilio (${sosSign.count ?? 1} de ${SOS_REPEATS}). Agita el guante ${SOS_REPEATS} veces en 15 segundos para que la alerta se envíe sola`
+                  : `Se reconoció «${sosSign.label}» (${sosSign.count ?? 1} de ${SOS_REPEATS}). Repite la seña ${SOS_REPEATS} veces en 15 segundos para que la alerta se envíe sola`}
                 {channelReady ? ` a ${telegram.chatName || 'tu contacto'}.` : '.'}
               </p>
             </div>

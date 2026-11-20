@@ -19,7 +19,32 @@ mandan un mensaje al contacto configurado a través de un bot de Telegram.
 Todo se guarda en `localStorage['klaps.telegram.v1']` (`token`, `chatId`, `chatName`), solo en ese
 navegador.
 
-## 2. Cómo se dispara
+## 2. Seña física de auxilio (sin entrenamiento)
+
+El clasificador KNN necesita señas grabadas, y con el guante actual los flex solo dan señal en un
+dedo: las letras estáticas todavía no son fiables. Por eso la emergencia tiene un camino propio que
+usa **solo el MPU-6050** y no depende de ninguna seña entrenada:
+
+> **Agitar el guante de lado a lado, tres veces**, con el guante conectado y la detección en marcha
+> en `/traducir`.
+
+Cómo se reconoce cada vaivén (`src/services/emergency/helpSignal.js`):
+
+- Se mira el **cambio de aceleración entre dos tramas seguidas** (20 Hz). Cada salto de 6 m/s² o más
+  cuenta como un impulso.
+- Un vaivén necesita **3 impulsos y al menos 2 inversiones de dirección**. Esa inversión es lo que
+  distingue agitar de un movimiento suelto: saludar, alcanzar un objeto o dejar el guante sobre la
+  mesa empujan la aceleración en una sola dirección y no suman.
+- Al quedarse quieto 700 ms se cierra el vaivén y se evalúa; un movimiento continuo de más de
+  1,6 s se descarta para que no cuente como varias señas.
+- Tres vaivenes dentro de 15 s abren el mismo aviso cancelable de 10 s del apartado siguiente.
+- Las tramas en ceros (guante sin IMU) se ignoran: nunca disparan nada.
+
+En pantalla, dentro de «Señal en vivo», hay un medidor **«Seña física de auxilio»** que muestra la
+intensidad del movimiento y los impulsos del vaivén en curso. Si el medidor se mueve pero el contador
+no sube, la sacudida es demasiado suave o no invierte la dirección.
+
+## 3. Cómo se dispara
 
 ```
 seña SOS reconocida 1×  →  contador 1/3 (aviso en pantalla)
@@ -27,6 +52,8 @@ seña SOS reconocida 2×  →  contador 2/3
 seña SOS reconocida 3×  →  cuenta atrás de 10 s  →  envío automático a Telegram
 ```
 
+- Valen las dos vías: la seña **entrenada** llamada `SOS` / `emergencia` / `auxilio` y la **seña
+  física** (agitar el guante). También se pueden mezclar.
 - Las repeticiones cuentan solo si están separadas menos de **15 s** entre sí.
 - Durante la cuenta atrás se puede **cancelar** o pulsar **Enviar ahora**.
 - Si el permiso de ubicación está activado, se pide al abrir el aviso y se añade un enlace de Google
@@ -34,7 +61,7 @@ seña SOS reconocida 3×  →  cuenta atrás de 10 s  →  envío automático a 
 - El botón **Activar SOS** de la pantalla de emergencia usa el mismo envío con su propio flujo de
   confirmación.
 
-## 3. Contenido del mensaje
+## 4. Contenido del mensaje
 
 ```
 ALERTA KLAPS · EMERGENCIA
@@ -46,7 +73,7 @@ https://www.google.com/maps?q=-12.04318,-77.02824
 Hora: 14/11/2026, 13:04:22
 ```
 
-## 4. Estados reales, no simulados
+## 5. Estados reales, no simulados
 
 | Situación | Qué muestra la app |
 | --- | --- |
@@ -55,6 +82,7 @@ Hora: 14/11/2026, 13:04:22
 | Red caída o petición bloqueada (CORS/extensiones) | «No se pudo contactar con api.telegram.org…» |
 | Sin token o sin contacto | «No hay ningún canal conectado todavía…» |
 | Token/contacto inválido | El formulario no deja guardar y explica el formato |
+| Sin señas entrenadas | La detección se puede iniciar igual: funciona la seña física de auxilio |
 
 El estado solo pasa a «enviada» con la respuesta de Telegram. Nunca se marca como entregada una
 alerta que no salió.
