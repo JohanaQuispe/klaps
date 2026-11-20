@@ -450,6 +450,11 @@ export default function Emergency() {
               <span className="font-semibold text-brand-800">3.</span> Pega el token, pulsa{' '}
               <strong className="text-ink">Buscar contactos</strong> y elige a quién avisar.
             </li>
+            <li>
+              <span className="font-semibold text-brand-800">4.</span> Con el guante conectado, en{' '}
+              <strong className="text-ink">Traducción</strong> agita el guante{' '}
+              <strong className="text-ink">3 veces</strong>: la alerta se envía sin entrenar señas.
+            </li>
           </ol>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
