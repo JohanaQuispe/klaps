@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>KLAPS · Cartel de proyecto final (A3)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  /* ────────────────────────────────────────────────────────────────────────
+     Cartel A3 horizontal (420 × 297 mm) listo para imprimir o exportar a PDF:
+     Chrome → Ctrl+P → Destino: Guardar como PDF → Tamaño: A3 → Horizontal.
+     ──────────────────────────────────────────────────────────────────────── */
+  @page { size: A3 landscape; margin: 0; }
+
+  :root {
+    --morado: #7961d9;
+    --violeta: #51409b;
+    --lavanda: #e8dfff;
+    --lila: #f4efff;
+    --fondo: #faf8ff;
+    --rosa: #f5c7dc;
+    --coral: #f2a1a8;
+    --celeste: #cbe8fa;
+    --azul: #78a9e8;
+    --menta: #bcebd8;
+    --amarillo: #ffe6a8;
+    --naranja: #f5b77d;
+    --tinta: #241c4d;
+    --tinta-suave: #4b4470;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: #e9e6f2;
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    color: var(--tinta);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .hoja {
+    width: 420mm;
+    height: 297mm;
+    padding: 7mm 8mm 6mm;
+    background: var(--fondo);
+    display: flex;
+    flex-direction: column;
+    gap: 4.5mm;
+  }
+
+  @media screen {
+    body { display: flex; justify-content: center; padding: 10mm 0; }
+    .hoja { box-shadow: 0 8mm 24mm rgba(36, 28, 77, 0.25); }
+  }
+
+  /* ── Cabecera ─────────────────────────────────────────────────────────── */
+  .cabecera {
+    display: grid;
+    grid-template-columns: 62mm 1fr 62mm;
+    align-items: center;
+    gap: 6mm;
+    background: linear-gradient(100deg, var(--violeta) 0%, #2f2470 55%, #241c4d 100%);
+    color: #fff;
+    border-radius: 4mm;
+    padding: 4mm 6mm;
+  }
+  .upn { display: flex; align-items: center; gap: 3mm; }
+  .upn-marca {
+    width: 15mm; height: 15mm; border-radius: 3mm;
+    background: var(--amarillo); color: var(--violeta);
+    font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 6.4mm;
+    display: grid; place-items: center; letter-spacing: -0.4mm;
+  }
+  .upn-txt { font-size: 3.1mm; line-height: 1.25; font-weight: 600; opacity: 0.95; }
+  .titular { text-align: center; }
+  .titular .materia {
+    font-size: 3.2mm; letter-spacing: 0.9mm; text-transform: uppercase;
+    font-weight: 600; color: var(--amarillo);
+  }
+  .titular h1 {
+    font-family: 'Nunito', sans-serif; font-weight: 900;
+    font-size: 10.2mm; line-height: 1.02; margin-top: 1mm; letter-spacing: -0.2mm;
+  }
+  .titular h1 small { font-size: 6.4mm; font-weight: 800; color: var(--lavanda); display: block; }
+  .insignia {
+    justify-self: end; text-align: center;
+    background: rgba(255, 255, 255, 0.14);
+    border: 0.4mm solid rgba(255, 255, 255, 0.45);
+    border-radius: 2.6mm; padding: 2.4mm 4mm;
+    font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 3.6mm; line-height: 1.2;
+  }
+  .insignia span { display: block; font-size: 2.6mm; font-weight: 600; opacity: 0.85; }
+
+  /* ── Bloque de arquitectura ───────────────────────────────────────────── */
+  .arquitectura { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3mm; }
+
+  .etapa {
+    position: relative; border-radius: 3.4mm; padding: 3.4mm 3.6mm 3.8mm;
+    border: 0.5mm solid rgba(121, 97, 217, 0.22);
+    background: #fff;
+    display: flex; flex-direction: column; gap: 2.2mm;
+  }
+  .etapa::after {
+    content: '';
+    position: absolute; top: 50%; right: -3mm; width: 2.4mm; height: 2.4mm;
+    border-top: 0.7mm solid var(--morado); border-right: 0.7mm solid var(--morado);
+    transform: translateY(-50%) rotate(45deg);
+  }
+  .etapa:last-child::after { display: none; }
+
+  .etapa-cab {
+    display: flex; align-items: center; gap: 2.4mm;
+    padding: 2.2mm 2.6mm; border-radius: 2.4mm;
+    font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 4.1mm; line-height: 1.1;
+  }
+  .etapa-cab small { display: block; font-size: 2.7mm; font-weight: 600; opacity: 0.85; }
+  .etapa-cab svg { width: 8.4mm; height: 8.4mm; flex: 0 0 auto; }
+
+  .e1 .etapa-cab { background: var(--celeste); }
+  .e2 .etapa-cab { background: var(--lavanda); }
+  .e3 .etapa-cab { background: var(--menta); }
+  .e4 .etapa-cab { background: var(--amarillo); }
+
+  .etapa ul { list-style: none; display: flex; flex-direction: column; gap: 1.5mm; }
+  .etapa li {
+    font-size: 2.92mm; line-height: 1.32; color: var(--tinta-suave);
+    padding-left: 4mm; position: relative;
+  }
+  .etapa li::before {
+    content: ''; position: absolute; left: 0; top: 1.05mm;
+    width: 1.9mm; height: 1.9mm; border-radius: 50%;
+    background: var(--morado); opacity: 0.55;
+  }
+  .etapa li b { color: var(--tinta); font-weight: 600; }
+  .etapa .dato {
+    margin-top: auto;
+    font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 2.85mm;
+    color: var(--violeta); background: var(--lila);
+    border-radius: 2mm; padding: 1.8mm 2.2mm; line-height: 1.25;
+  }
+
+  /* ── Fila central ─────────────────────────────────────────────────────── */
+  .centro { display: grid; grid-template-columns: 1.02fr 1fr 1.16fr; gap: 3mm; }
+
+  .panel {
+    background: #fff; border-radius: 3.4mm; padding: 3.4mm 4mm;
+    border: 0.5mm solid rgba(81, 64, 155, 0.16);
+    display: flex; flex-direction: column; gap: 2.4mm;
+  }
+  .panel h2 {
+    font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 4mm;
+    display: flex; align-items: center; gap: 2mm; color: var(--violeta);
+  }
+  .panel h2 span.pastilla {
+    width: 2.2mm; height: 6.4mm; border-radius: 1.2mm; background: var(--morado); display: inline-block;
+  }
+  .panel p, .panel li { font-size: 2.86mm; line-height: 1.34; color: var(--tinta-suave); }
+
+  ol.flujo { list-style: none; display: flex; flex-direction: column; gap: 1.9mm; counter-reset: paso; }
+  ol.flujo li { counter-increment: paso; display: grid; grid-template-columns: 6.4mm 1fr; gap: 2.4mm; }
+  ol.flujo li::before {
+    content: counter(paso);
+    font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 3.4mm;
+    width: 6.4mm; height: 6.4mm; border-radius: 50%;
+    display: grid; place-items: center;
+    background: var(--morado); color: #fff;
+  }
+  ol.flujo li b { color: var(--tinta); font-weight: 600; }
+
+  .decisiones { display: flex; flex-direction: column; gap: 2.1mm; }
+  .decision {
+    border-left: 1.4mm solid var(--azul); padding: 0.6mm 0 0.6mm 2.6mm;
+    background: linear-gradient(90deg, rgba(203, 232, 250, 0.5), transparent 70%);
+    border-radius: 0 2mm 2mm 0;
+  }
+  .decision:nth-child(2) { border-color: var(--menta); background: linear-gradient(90deg, rgba(188, 235, 216, 0.5), transparent 70%); }
+  .decision:nth-child(3) { border-color: var(--naranja); background: linear-gradient(90deg, rgba(245, 183, 125, 0.35), transparent 70%); }
+  .decision:nth-child(4) { border-color: var(--coral); background: linear-gradient(90deg, rgba(242, 161, 168, 0.32), transparent 70%); }
+  .decision strong { display: block; font-size: 2.95mm; color: var(--tinta); font-weight: 600; }
+  .decision span { font-size: 2.76mm; line-height: 1.3; color: var(--tinta-suave); }
+
+  .alcance { background: var(--lila); border-color: rgba(121, 97, 217, 0.3); }
+  .alcance ul { list-style: none; display: flex; flex-direction: column; gap: 1.8mm; }
+  .alcance li { padding-left: 5mm; position: relative; }
+  .alcance li::before {
+    content: '!';
+    position: absolute; left: 0; top: 0;
+    width: 3.4mm; height: 3.4mm; border-radius: 50%;
+    background: var(--naranja); color: #4a2a00;
+    font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 2.4mm;
+    display: grid; place-items: center;
+  }
+  .alcance li.ok::before { content: '✓'; background: var(--menta); color: #06402b; }
+
+  /* ── Materiales ───────────────────────────────────────────────────────── */
+  .materiales { display: grid; grid-template-columns: 1fr 74mm; gap: 3mm; }
+
+  .tira-materiales {
+    background: #fff; border-radius: 3.4mm; padding: 3.2mm 4mm;
+    border: 0.5mm solid rgba(81, 64, 155, 0.16);
+    display: flex; flex-direction: column; gap: 2.4mm;
+  }
+  .tira-materiales h2 { font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 4mm; color: var(--violeta); }
+  .chips { display: flex; flex-wrap: wrap; gap: 2.2mm; }
+  .chip {
+    border: 0.4mm solid rgba(121, 97, 217, 0.28); border-radius: 2.4mm;
+    padding: 1.9mm 2.6mm; background: var(--fondo); min-width: 40mm;
+  }
+  .chip b { display: block; font-family: 'Nunito', sans-serif; font-size: 2.95mm; font-weight: 800; }
+  .chip span { font-size: 2.6mm; color: var(--tinta-suave); }
+  .chip.fase2 { background: #fff7e6; border-color: rgba(245, 183, 125, 0.85); border-style: dashed; }
+  .chip.fase2 b::after { content: ' · fase 2'; font-size: 2.3mm; color: #8a5a12; font-weight: 700; }
+
+  .alimentacion {
+    background: linear-gradient(160deg, #fff2f4, #ffe9d9);
+    border: 0.6mm dashed var(--coral); border-radius: 3.4mm; padding: 3.2mm 3.6mm;
+    display: flex; flex-direction: column; gap: 1.8mm;
+  }
+  .alimentacion h3 {
+    font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 3.6mm; color: #8c2f3c;
+    display: flex; align-items: center; gap: 2mm;
+  }
+  .alimentacion p { font-size: 2.72mm; line-height: 1.3; color: #6b3a41; }
+  .cadena { display: flex; align-items: center; gap: 1.4mm; flex-wrap: wrap; font-size: 2.5mm; font-weight: 600; color: #6b3a41; }
+  .cadena em {
+    font-style: normal; background: #fff; border: 0.3mm solid rgba(140, 47, 60, 0.3);
+    border-radius: 1.6mm; padding: 1mm 1.6mm;
+  }
+
+  /* ── Pie ──────────────────────────────────────────────────────────────── */
+  .pie {
+    margin-top: auto; display: flex; align-items: center; justify-content: space-between;
+    gap: 6mm; font-size: 2.7mm; color: var(--tinta-suave);
+    border-top: 0.4mm solid rgba(81, 64, 155, 0.25); padding-top: 2.4mm;
+  }
+  .pie b { color: var(--tinta); font-weight: 600; }
+  .lema {
+    font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 3.2mm;
+    color: var(--morado); letter-spacing: 0.2mm;
+  }
+</style>
+</head>
+<body>
+<div class="hoja">
+
+  <!-- ══ Cabecera ══════════════════════════════════════════════════════════ -->
+  <header class="cabecera">
+    <div class="upn">
+      <div class="upn-marca">UPN</div>
+      <div class="upn-txt">Universidad<br />Privada<br />del Norte</div>
+    </div>
+
+    <div class="titular">
+      <p class="materia">Arquitectura del Computador · Proyecto Final</p>
+      <h1>KLAPS <small>Sistema de comunicación asistida con guantes instrumentados</small></h1>
+    </div>
+
+    <div class="insignia">
+      Comunicación<br />sin barreras
+      <span>ESP32 · BLE · KNN en el navegador</span>
+    </div>
+  </header>
+
+  <!-- ══ Arquitectura ══════════════════════════════════════════════════════ -->
+  <section class="arquitectura" aria-label="Arquitectura del sistema en cuatro etapas">
+
+    <article class="etapa e1">
+      <div class="etapa-cab">
+        <svg viewBox="0 0 48 48" fill="none" stroke="#2b5f8a" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M14 30V16a3 3 0 0 1 6 0v10" />
+          <path d="M20 26V13a3 3 0 0 1 6 0v13" />
+          <path d="M26 26V15a3 3 0 0 1 6 0v13" />
+          <path d="M32 28v-7a3 3 0 0 1 6 0v11a12 12 0 0 1-12 12h-4a10 10 0 0 1-9-6l-4-8a3 3 0 0 1 5-3l3 4" />
+        </svg>
+        <div>1 · Entrada<small>Transducción del gesto</small></div>
+      </div>
+      <ul>
+        <li><b>Dos guantes</b> (KLAPS-D y KLAPS-U), uno por mano.</li>
+        <li><b>5 sensores flex</b> resistivos por guante, uno por dedo.</li>
+        <li><b>MPU-6050</b>: acelerómetro ±2 g y giroscopio ±250 °/s por I²C (SDA 21 / SCL 22).</li>
+        <li>Divisor de tensión <b>3V3 → 10 kΩ → GND</b> hacia entradas ADC1.</li>
+      </ul>
+      <p class="dato">11 señales analógicas por guante → ADC de 12 bits</p>
+    </article>
+
+    <article class="etapa e2">
+      <div class="etapa-cab">
+        <svg viewBox="0 0 48 48" fill="none" stroke="#4b3796" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="12" y="12" width="24" height="24" rx="3" />
+          <rect x="19" y="19" width="10" height="10" rx="1.5" />
+          <path d="M18 12V7M24 12V7M30 12V7M18 36v5M24 36v5M30 36v5M12 18H7M12 24H7M12 30H7M36 18h5M36 24h5M36 30h5" />
+        </svg>
+        <div>2 · Procesamiento<small>ESP32 DevKit V1 · 240 MHz</small></div>
+      </div>
+      <ul>
+        <li>Muestrea los <b>11 canales a 20 Hz</b> y filtra las lecturas.</li>
+        <li>Empaqueta una <b>trama binaria fija de 34 bytes</b>: 5×<i>int16</i> (flex) + 6×<i>float32</i> (IMU).</li>
+        <li><b>No interpreta el gesto</b>: solo adquiere, normaliza y publica (decisión de arquitectura, ver columna central).</li>
+        <li>Servidor BLE propio con notificaciones GATT.</li>
+      </ul>
+      <p class="dato">34 B × 20 Hz ≈ 680 B/s por guante</p>
+    </article>
+
+    <article class="etapa e3">
+      <div class="etapa-cab">
+        <svg viewBox="0 0 48 48" fill="none" stroke="#0f5c40" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M24 10l14 27H10z" />
+          <path d="M24 19v10M24 33v2" />
+        </svg>
+        <div>3 · Comunicación<small>Bluetooth LE</small></div>
+      </div>
+      <ul>
+        <li>Servicio y característica propios (<b>UUID 6e400001…</b>) para no depender de perfiles estándar.</li>
+        <li><b>Notificaciones</b> de 34 bytes; el navegador se suscribe y decodifica.</li>
+        <li>El dispositivo se anuncia como <b>ESP32-D</b> o <b>ESP32-U</b>, sin router ni internet.</li>
+        <li>Enlace local de corto alcance: la alerta SOS sí requiere internet (Telegram).</li>
+      </ul>
+      <p class="dato">Web Bluetooth: sin instalar app nativa</p>
+    </article>
+
+    <article class="etapa e4">
+      <div class="etapa-cab">
+        <svg viewBox="0 0 48 48" fill="none" stroke="#7a5200" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="9" y="12" width="30" height="22" rx="3" />
+          <path d="M18 40h12M24 34v6" />
+          <path d="M15 20h8M15 26h14" />
+        </svg>
+        <div>4 · Aplicación<small>KLAPS · web mobile-first</small></div>
+      </div>
+      <ul>
+        <li>Web app en <b>React + Vite</b>: corre en el navegador del móvil o del PC, sin instalación.</li>
+        <li><b>Clasificador KNN en JavaScript</b>: vector de 22 dimensiones, K = 3, umbral 75 %.</li>
+        <li><b>Calibración guiada</b> y entrenamiento de señas desde la propia interfaz.</li>
+        <li>Salida: texto, voz (Web Speech API), historial y <b>alerta SOS por Telegram</b>.</li>
+      </ul>
+      <p class="dato">Reconoce señas estáticas y dinámicas</p>
+    </article>
+  </section>
+
+  <!-- ══ Fila central ══════════════════════════════════════════════════════ -->
+  <section class="centro">
+
+    <div class="panel">
+      <h2><span class="pastilla"></span>Flujo de funcionamiento</h2>
+      <ol class="flujo">
+        <li><span><b>Captura.</b> Los 5 flex miden la flexión de cada dedo y el MPU-6050 la orientación y el movimiento.</span></li>
+        <li><span><b>Adquisición.</b> El ESP32 muestrea a 20 Hz, normaliza y arma la trama de 34 bytes.</span></li>
+        <li><span><b>Transporte.</b> BLE entrega las notificaciones al navegador emparejado.</span></li>
+        <li><span><b>Reconocimiento.</b> La app decodifica, aplica la calibración y clasifica con KNN (seña estática o trayectoria dinámica).</span></li>
+        <li><span><b>Actuación.</b> Palabra en pantalla + voz. Tres señas de SOS o la seña física abren una cuenta atrás de 10 s y envían la alerta.</span></li>
+      </ol>
+    </div>
+
+    <div class="panel">
+      <h2><span class="pastilla"></span>Decisiones de arquitectura</h2>
+      <div class="decisiones">
+        <div class="decision">
+          <strong>Clasificar en el cliente, no en el ESP32</strong>
+          <span>El microcontrolador no entrena ni guarda modelos: las muestras viven en la app y se recalibran sin recompilar el firmware.</span>
+        </div>
+        <div class="decision">
+          <strong>Trama binaria fija en lugar de JSON</strong>
+          <span>Menos bytes, menos latencia y menos CPU en un microcontrolador de 240 MHz con BLE activo.</span>
+        </div>
+        <div class="decision">
+          <strong>BLE en lugar de Wi-Fi</strong>
+          <span>No necesita red, el consumo es menor y el alcance (≈10 m) cubre el uso personal.</span>
+        </div>
+        <div class="decision">
+          <strong>Token del bot fuera del navegador</strong>
+          <span>La alerta pasa por una función serverless que guarda el chat y habla con Telegram: el token nunca llega al cliente.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel alcance">
+      <h2><span class="pastilla"></span>Alcance y limitaciones declaradas</h2>
+      <ul>
+        <li class="ok">Traduce <b>posturas y movimientos entrenados</b> por el usuario, no lengua de señas completa.</li>
+        <li class="ok">Funciona sin internet para traducir; solo la alerta SOS usa la red.</li>
+        <li>Requiere <b>calibración</b> y capturas de muestra antes de reconocer.</li>
+        <li>Con el guante actual solo 1 de 5 sensores flex da señal útil (montaje pendiente), así que las letras estáticas todavía no son fiables.</li>
+        <li>La <b>etapa de alimentación portátil</b> está diseñada pero no implementada: hoy el ESP32 se alimenta por USB.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ══ Materiales + alimentación ════════════════════════════════════════ -->
+  <section class="materiales">
+    <div class="tira-materiales">
+      <h2>Materiales del proyecto</h2>
+      <div class="chips">
+        <div class="chip"><b>ESP32 DevKit V1</b><span>×2 (un guante por mano)</span></div>
+        <div class="chip"><b>MPU-6050 (IMU)</b><span>×2</span></div>
+        <div class="chip"><b>Sensor de flexión</b><span>×10 (5 por guante)</span></div>
+        <div class="chip"><b>Resistencias 10 kΩ</b><span>×10 divisor de tensión</span></div>
+        <div class="chip"><b>Guantes de tela + velcro</b><span>×2</span></div>
+        <div class="chip"><b>Cable, jumpers, estaño</b><span>kit de montaje</span></div>
+        <div class="chip fase2"><b>LiPo 3,7 V · TP4056 · elevador 5 V · interruptor</b><span>×2 juegos</span></div>
+      </div>
+    </div>
+
+    <aside class="alimentacion">
+      <h3>
+        <svg viewBox="0 0 48 48" width="16" height="16" fill="none" stroke="#b03a4c" stroke-width="3" stroke-linecap="round" aria-hidden="true">
+          <rect x="10" y="14" width="28" height="20" rx="3" /><path d="M38 21h4v6h-4" /><path d="M17 24h10" />
+        </svg>
+        Alimentación portátil · fase 2
+      </h3>
+      <p>Diseñada pero <b>no implementada</b>: el prototipo se alimenta por USB. Se documenta como trabajo futuro, no como parte del entregable actual.</p>
+      <p class="cadena">
+        <em>LiPo 3,7 V</em> → <em>TP4056</em> → <em>elevador 3,7→5 V</em> → <em>ESP32</em>
+      </p>
+      <p>Al ser dos guantes, la cadena se duplica (×2) y añade interruptor ON/OFF por unidad.</p>
+    </aside>
+  </section>
+
+  <!-- ══ Pie ══════════════════════════════════════════════════════════════ -->
+  <footer class="pie">
+    <div>
+      <b>Integrantes:</b> ______________________________________ ·
+      <b>Docente:</b> ______________________
+    </div>
+    <div class="lema">KLAPS · Comunicación sin barreras</div>
+    <div><b>Periodo:</b> 2026 · Guantes instrumentados + reconocimiento en el navegador</div>
+  </footer>
+
+</div>
+</body>
+</html>
