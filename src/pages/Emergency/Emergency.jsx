@@ -1,5 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Copy, MapPin, MessageCircle, Phone, Save, Search, Send, ShieldAlert, Siren, Trash2 } from 'lucide-react'
+import {
+  Copy,
+  ExternalLink,
+  MapPin,
+  MessageCircle,
+  Phone,
+  RefreshCw,
+  Save,
+  Send,
+  ShieldAlert,
+  ShieldCheck,
+  Siren,
+  Trash2,
+} from 'lucide-react'
 import PageHeader from '../../components/layout/PageHeader'
 import Card from '../../components/common/Card'
 import Button from '../../components/common/Button'
@@ -17,16 +30,30 @@ import {
   sendAlert,
 } from '../../services/emergency/sos.js'
 import {
-  clearTelegramConfig,
-  fetchTelegramChats,
-  isValidChatId,
-  isValidToken,
-  loadTelegramConfig,
-  normalizeChatId,
-  normalizeToken,
-  saveTelegramConfig,
-  sendTelegramTest,
-} from '../../services/emergency/telegram.js'
+  clearLink,
+  ensureLink,
+  isLinked,
+  linkContact,
+  rotateLink,
+} from '../../services/emergency/linkCode.js'
+import {
+  buildTestMessage,
+  sendAlertToContact,
+  unlinkContact,
+  verifyLinkage,
+} from '../../services/emergency/telegramApi.js'
+import {
+  TELEGRAM_BOT_LABEL,
+  buildTelegramDeepLink,
+  isTelegramServerConfigured,
+} from '../../config/telegram.js'
+import {
+  clearSavedLocation,
+  describeLocationAge,
+  isFreshLocation,
+  loadSavedLocation,
+  saveSavedLocation,
+} from '../../services/emergency/location.js'
 
 const COUNTDOWN_START = 5
 
@@ -45,17 +72,20 @@ export default function Emergency() {
   const [contactPhone, setContactPhone] = useState(preferences.emergencyContact?.phone ?? '')
   const [contactSaved, setContactSaved] = useState(false)
 
-  // ── Telegram ──
-  const [telegram, setTelegram] = useState(loadTelegramConfig)
-  const [tokenInput, setTokenInput] = useState(() => loadTelegramConfig().token)
-  const [chatInput, setChatInput] = useState(() => loadTelegramConfig().chatId)
-  const [chats, setChats] = useState([])
+  // ── Telegram (bot oficial + código de vinculación) ──
+  // `ensureLink` crea el código la primera vez y lo guarda en este navegador.
+  const [link, setLink] = useState(ensureLink)
   const [telegramMessage, setTelegramMessage] = useState('')
   const [telegramError, setTelegramError] = useState('')
-  const [searching, setSearching] = useState(false)
+  const [verifying, setVerifying] = useState(false)
   const [testingSend, setTestingSend] = useState(false)
 
-  const channelReady = isEmergencyChannelReady(telegram)
+  // ── Ubicación guardada para la alerta ──
+  const [savedLocation, setSavedLocation] = useState(loadSavedLocation)
+
+  const channelReady = isEmergencyChannelReady(link)
+  const deepLink = buildTelegramDeepLink(link.code)
+  const linked = isLinked(link)
 
   const gestureLabel =
     EMERGENCY_GESTURES.find((item) => item.value === preferences.emergencyGesture)?.label ?? ''
@@ -65,34 +95,45 @@ export default function Emergency() {
 
     let currentLocation = location
     let locationMessage = locationError
+    let locationNote = ''
 
     if (preferences.shareLocation && !currentLocation) {
       const response = await requestLocation()
       if (response.location) {
         currentLocation = response.location
+        saveSavedLocation(response.location)
         setLocation(response.location)
+        setSavedLocation(response.location)
         locationMessage = ''
       } else {
+        // Respaldo: la ubicación que se autorizó y guardó en esta pantalla.
+        const stored = loadSavedLocation()
+        if (isFreshLocation(stored)) {
+          currentLocation = stored
+          locationNote = `ubicación guardada ${describeLocationAge(stored)}`
+          setLocation(stored)
+        }
         locationMessage = response.error
         setLocationError(response.error)
       }
     }
 
     const message = buildAlertMessage({
-      contactName: preferences.emergencyContact?.name,
+      contactName: preferences.emergencyContact?.name || link.chatName,
       location: currentLocation,
+      locationNote,
       gesture: preferences.emergencyGesture === 'sin-gesto' ? null : gestureLabel,
     })
 
     const response = await sendAlert({
       message,
       contact: preferences.emergencyContact,
-      telegram,
+      link,
     })
 
     setResult({ ...response, message, location: currentLocation, locationError: locationMessage })
     setPhase('idle')
-  }, [location, locationError, preferences, gestureLabel, telegram])
+  }, [location, locationError, preferences, gestureLabel, link])
 
   // Cuenta atrás antes de preparar la alerta (el disparo ocurre en el temporizador,
   // no de forma síncrona durante el render)
@@ -125,70 +166,57 @@ export default function Emergency() {
     window.setTimeout(() => setContactSaved(false), 2500)
   }
 
-  const saveTelegram = () => {
-    const token = normalizeToken(tokenInput)
-    const chatId = normalizeChatId(chatInput)
-
-    if (!isValidToken(token)) {
-      setTelegramError('El token no tiene el formato correcto. Cópialo de @BotFather: 123456789:AA…')
-      return
-    }
-    if (!isValidChatId(chatId)) {
-      setTelegramError('Pulsa «Buscar contactos» y elige uno, o escribe el ID numérico del chat.')
-      return
-    }
-
-    const next = {
-      token,
-      chatId,
-      chatName: chats.find((chat) => chat.id === chatId)?.name ?? '',
-    }
-    setTelegram(saveTelegramConfig(next))
-    setTelegramError('')
-    setTelegramMessage('Telegram guardado: la alerta SOS se enviará a este chat.')
+  const copyInvite = () => {
+    if (!deepLink) return
+    copy(
+      [
+        'Ayúdame a recibir mis alertas de KLAPS.',
+        `1. Abre este enlace: ${deepLink}`,
+        '2. Pulsa «Iniciar» en el bot.',
+        `3. Avísame cuando lo hayas hecho (mi código es ${link.code}).`,
+      ].join('\n'),
+    )
   }
 
-  const removeTelegram = () => {
-    setTelegram(clearTelegramConfig())
-    setTokenInput('')
-    setChatInput('')
-    setChats([])
+  const verifyLink = async () => {
+    setVerifying(true)
     setTelegramError('')
-    setTelegramMessage('Configuración de Telegram eliminada de este navegador.')
-  }
+    setTelegramMessage('Consultando la vinculación de tu código…')
 
-  const searchChats = async () => {
-    const token = normalizeToken(tokenInput)
-    if (!isValidToken(token)) {
-      setTelegramError('Escribe primero el token del bot para buscar contactos.')
-      return
-    }
-
-    setSearching(true)
-    setTelegramError('')
-    setTelegramMessage('')
-
-    const response = await fetchTelegramChats(token)
-    setSearching(false)
+    const response = await verifyLinkage(link.code)
+    setVerifying(false)
 
     if (!response.ok) {
+      setTelegramMessage('')
       setTelegramError(response.error)
       return
     }
 
-    setChats(response.chats)
-    if (response.chats.length === 0) {
+    if (!response.linked) {
+      setTelegramMessage('')
       setTelegramError(response.error)
-    } else {
-      setTelegramMessage(`Se encontraron ${response.chats.length} chats que escribieron al bot.`)
+      return
     }
+
+    // Solo se guarda el contacto que el servidor confirmó para ESTE código.
+    const next = linkContact(link.code, {
+      chatId: response.chatId,
+      chatName: response.chatName,
+    })
+    setLink(next)
+    updatePreference('emergencyContact', {
+      name: preferences.emergencyContact?.name || response.chatName,
+      phone: preferences.emergencyContact?.phone ?? '',
+    })
+    setTelegramError('')
+    setTelegramMessage(
+      `Vinculado: las alertas de este navegador llegarán a ${response.chatName || 'tu contacto'}.`,
+    )
   }
 
   const testTelegram = async () => {
-    const config = { token: normalizeToken(tokenInput), chatId: normalizeChatId(chatInput) }
-
-    if (!isValidToken(config.token) || !isValidChatId(config.chatId)) {
-      setTelegramError('Guarda antes el token y el contacto de Telegram.')
+    if (!linked) {
+      setTelegramError('Vincula primero a tu contacto: sin vinculación no hay a quién avisar.')
       return
     }
 
@@ -196,7 +224,10 @@ export default function Emergency() {
     setTelegramError('')
     setTelegramMessage('Enviando mensaje de prueba…')
 
-    const response = await sendTelegramTest(config)
+    const response = await sendAlertToContact({
+      code: link.code,
+      text: buildTestMessage({ botLabel: TELEGRAM_BOT_LABEL }),
+    })
     setTestingSend(false)
 
     if (response.delivered) {
@@ -207,13 +238,55 @@ export default function Emergency() {
     }
   }
 
-  const testLocation = async () => {
+  const unlink = async () => {
+    setTelegramError('')
+    setTelegramMessage('')
+
+    // Primero se pide al servidor que olvide la pareja código → chat.
+    const response = await unlinkContact(link.code)
+    clearLink()
+    setLink(ensureLink())
+
+    setTelegramMessage(
+      response.ok
+        ? 'Contacto desvinculado. Este navegador ya tiene un código nuevo.'
+        : 'El contacto se desvinculó en este navegador. El servidor no confirmó la baja; vuelve a intentarlo con conexión.',
+    )
+    if (!response.ok && response.error) setTelegramError(response.error)
+  }
+
+  const rotateCode = async () => {
+    setTelegramError('')
+    const previous = link.code
+    const next = rotateLink()
+    setLink(next)
+    if (previous) await unlinkContact(previous)
+    setTelegramMessage('Código nuevo generado. El anterior ya no se puede usar.')
+  }
+
+  const activateLocation = async () => {
     setLocating(true)
     setLocationError('')
     const response = await requestLocation()
-    if (response.location) setLocation(response.location)
-    else setLocationError(response.error)
+
+    if (response.location) {
+      const stored = saveSavedLocation(response.location)
+      setSavedLocation(stored)
+      setLocation(response.location)
+      updatePreference('shareLocation', true)
+      setTelegramMessage('')
+    } else {
+      setLocationError(response.error)
+    }
     setLocating(false)
+  }
+
+  const removeLocation = () => {
+    clearSavedLocation()
+    setSavedLocation(null)
+    setLocation(null)
+    updatePreference('shareLocation', false)
+    setLocationError('')
   }
 
   return (
@@ -419,117 +492,132 @@ export default function Emergency() {
           </select>
 
           <p className="mt-3 rounded-md bg-brand-50 p-3 text-xs text-ink-soft">
-            Hoy el gesto no se detecta realmente: los guantes todavía no envían datos por Bluetooth.
-            El botón SOS sí funciona como confirmación manual.
+            El gesto elegido se describe en el mensaje. La alerta se dispara de tres formas: con la
+            seña física de auxilio (agitar el guante 3 veces en{' '}
+            <strong className="text-ink">Traducción</strong>), con el botón <strong className="text-ink">Activar SOS</strong> y
+            con una seña entrenada llamada SOS.
           </p>
         </Card>
 
-        {/* Alerta por Telegram */}
+        {/* Alerta por Telegram · bot oficial con código de vinculación */}
         <Card padding="lg" className="lg:col-span-2">
           <h2 className="flex items-center gap-2 font-display text-lg font-extrabold text-brand-800">
             <MessageCircle className="size-5 text-brand-600" aria-hidden="true" />
             Alerta por Telegram
           </h2>
           <p className="mt-1 text-sm text-ink-soft">
-            El mensaje de emergencia se envía desde tu propio bot de Telegram. Se configura una vez y
-            queda guardado solo en este navegador.
+            KLAPS avisa con su bot oficial{' '}
+            <strong className="font-semibold text-ink">{TELEGRAM_BOT_LABEL || '@ai_klaps_bot'}</strong>
+            . No tienes que crear ningún bot ni pegar contraseñas: vinculas a tu familiar con un
+            enlace y su chat queda asociado solo a tu código.
           </p>
 
-          <ol className="mt-3 grid gap-1.5 rounded-md bg-brand-50 px-3 py-2.5 text-xs text-ink-soft">
-            <li>
-              <span className="font-semibold text-brand-800">1.</span> Abre Telegram, busca{' '}
-              <strong className="text-ink">@BotFather</strong> y envía <code>/newbot</code>. Copia el
-              token que te da.
-            </li>
-            <li>
-              <span className="font-semibold text-brand-800">2.</span> Tu contacto debe abrir ese bot
-              y enviarle <code>/start</code> una vez (Telegram no permite escribir a un número sin
-              eso).
-            </li>
-            <li>
-              <span className="font-semibold text-brand-800">3.</span> Pega el token, pulsa{' '}
-              <strong className="text-ink">Buscar contactos</strong> y elige a quién avisar.
-            </li>
-            <li>
-              <span className="font-semibold text-brand-800">4.</span> Con el guante conectado, en{' '}
-              <strong className="text-ink">Traducción</strong> agita el guante{' '}
-              <strong className="text-ink">3 veces</strong>: la alerta se envía sin entrenar señas.
-            </li>
-          </ol>
-
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <div>
-              <label htmlFor="telegram-token" className="text-sm font-semibold text-ink">
-                Token del bot
-              </label>
-              <input
-                id="telegram-token"
-                type="password"
-                autoComplete="off"
-                spellCheck="false"
-                value={tokenInput}
-                onChange={(event) => setTokenInput(event.target.value)}
-                placeholder="123456789:AA…"
-                className="mt-1 min-h-12 w-full rounded-md border border-brand-200 bg-white px-3 font-mono text-sm text-ink placeholder:text-ink-soft/70"
-              />
-            </div>
-            <div>
-              <label htmlFor="telegram-chat" className="text-sm font-semibold text-ink">
-                Contacto (ID del chat)
-              </label>
-              <input
-                id="telegram-chat"
-                type="text"
-                inputMode="numeric"
-                spellCheck="false"
-                value={chatInput}
-                onChange={(event) => setChatInput(event.target.value)}
-                placeholder="123456789"
-                className="mt-1 min-h-12 w-full rounded-md border border-brand-200 bg-white px-3 font-mono text-sm text-ink placeholder:text-ink-soft/70"
-              />
-            </div>
-          </div>
-
-          {chats.length > 0 && (
-            <div className="mt-3">
-              <p className="text-sm font-semibold text-ink">Chats que escribieron al bot</p>
-              <ul className="mt-2 flex flex-wrap gap-2">
-                {chats.map((chat) => (
-                  <li key={chat.id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setChatInput(chat.id)
-                        setTelegramError('')
-                      }}
-                      className={
-                        chatInput === chat.id
-                          ? 'min-h-10 rounded-full bg-brand-600 px-3 text-sm font-semibold text-white'
-                          : 'min-h-10 rounded-full bg-brand-50 px-3 text-sm font-semibold text-brand-700 hover:bg-lavender'
-                      }
-                    >
-                      {chat.name}
-                      {chat.username ? ` ${chat.username}` : ''} · {chat.id}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
+          {!isTelegramServerConfigured && (
+            <p role="alert" className="mt-3 rounded-md bg-warning-soft px-3 py-2.5 text-sm text-ink">
+              <strong className="font-semibold">Falta conectar el servidor de alertas.</strong>{' '}
+              Copia <code>.env.example</code> como <code>.env</code> y define{' '}
+              <code>VITE_TELEGRAM_API_URL</code> con la URL de la función (ver{' '}
+              <code>docs/etapa-11-telegram-multiusuario.md</code>). Mientras falte, la vinculación y
+              el envío están desactivados y la app lo dice: no se simula nada.
+            </p>
           )}
 
+          {/* Código de vinculación */}
+          <div className="mt-4 rounded-lg border border-brand-200 bg-brand-50 p-4">
+            <p className="text-xs font-semibold tracking-[0.14em] text-brand-600 uppercase">
+              Tu código de vinculación
+            </p>
+            <p
+              className="mt-1 font-mono text-2xl font-extrabold tracking-wide text-brand-800 sm:text-3xl"
+              aria-label={`Código de vinculación ${link.code}`}
+            >
+              {link.code || '—'}
+            </p>
+            <p className="mt-1 text-xs text-ink-soft">
+              Es único de este navegador. El servidor solo acepta el mensaje{' '}
+              <code>/start {link.code}</code>, así que ningún otro chat puede quedar asociado a tu
+              alerta.
+            </p>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {deepLink ? (
+                <Button
+                  as="a"
+                  href={deepLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  size="sm"
+                  icon={ExternalLink}
+                >
+                  Vincular contacto en Telegram
+                </Button>
+              ) : (
+                <Button size="sm" icon={ExternalLink} disabled>
+                  Vincular contacto en Telegram
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={Copy}
+                onClick={copyInvite}
+                disabled={!deepLink}
+              >
+                {copied ? 'Enlace copiado' : 'Copiar enlace para mi familiar'}
+              </Button>
+              <Button size="sm" variant="ghost" icon={RefreshCw} onClick={rotateCode}>
+                Generar otro código
+              </Button>
+            </div>
+            {copyError && (
+              <p role="alert" className="mt-2 text-sm text-danger">
+                {copyError}
+              </p>
+            )}
+          </div>
+
+          {/* Estado de la vinculación */}
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
+            <span
+              className={
+                linked
+                  ? 'inline-flex items-center gap-1.5 rounded-full bg-mint px-3 py-1 font-semibold text-brand-800'
+                  : 'inline-flex items-center gap-1.5 rounded-full bg-brand-100 px-3 py-1 font-semibold text-brand-700'
+              }
+            >
+              <ShieldCheck className="size-4" aria-hidden="true" />
+              {linked
+                ? `Vinculado a ${link.chatName || 'tu contacto'}`
+                : 'Sin vincular: falta que tu familiar abra el enlace'}
+            </span>
+            {linked && link.linkedAt > 0 && (
+              <span className="text-xs text-ink-soft">
+                {`Vinculado ${describeLocationAge({ at: link.linkedAt })}`}
+              </span>
+            )}
+          </div>
+
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <Button size="sm" variant="secondary" icon={Search} onClick={searchChats} disabled={searching}>
-              {searching ? 'Buscando…' : 'Buscar contactos'}
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={ShieldCheck}
+              onClick={verifyLink}
+              disabled={verifying || !isTelegramServerConfigured}
+            >
+              {verifying ? 'Verificando…' : 'Verificar vinculación'}
             </Button>
-            <Button size="sm" icon={Save} onClick={saveTelegram}>
-              Guardar Telegram
-            </Button>
-            <Button size="sm" variant="secondary" icon={Send} onClick={testTelegram} disabled={testingSend}>
+            <Button
+              size="sm"
+              icon={Send}
+              onClick={testTelegram}
+              disabled={testingSend || !linked}
+            >
               {testingSend ? 'Enviando…' : 'Enviar prueba'}
             </Button>
-            {telegram.token && (
-              <Button size="sm" variant="ghost" icon={Trash2} onClick={removeTelegram}>
-                Quitar
+            {linked && (
+              <Button size="sm" variant="ghost" icon={Trash2} onClick={unlink}>
+                Desvincular
               </Button>
             )}
           </div>
@@ -545,51 +633,105 @@ export default function Emergency() {
           )}
 
           <p className="mt-3 rounded-md bg-white/70 px-3 py-2 text-xs text-ink-soft">
-            <strong className="text-ink">Seguridad:</strong> el token se guarda en este navegador y
-            cualquiera con acceso a este equipo podría leerlo. Crea un bot solo para KLAPS y no lo
-            compartas. La alerta se marca como enviada únicamente cuando Telegram responde
-            correctamente.
+            <strong className="text-ink">Cómo funciona:</strong> el código viaja dentro del enlace
+            <code className="mx-1">t.me/{'{bot}'}?start={link.code || 'KLAPS-00000'}</code>
+            Cuando tu familiar pulsa <strong className="text-ink">Iniciar</strong>, el servidor de
+            KLAPS guarda su <code>chat_id</code> junto a ese código y descarta los demás chats. El
+            token del bot nunca llega al navegador.
           </p>
         </Card>
 
-        {/* Ubicación */}
+        {/* Ubicación autorizada por adelantado */}
         <Card padding="lg" className="lg:col-span-2">
-          <h2 className="font-display text-lg font-extrabold text-brand-800">Ubicación</h2>
+          <h2 className="flex items-center gap-2 font-display text-lg font-extrabold text-brand-800">
+            <MapPin className="size-5 text-brand-600" aria-hidden="true" />
+            Ubicación para emergencias
+          </h2>
           <p className="mt-1 text-sm text-ink-soft">
-            Solo se solicita cuando tú lo pides. Nunca se comparte en segundo plano.
+            Autoriza la ubicación ahora, con calma. Cuando la alerta salga sola desde el guante, el
+            mensaje llevará las últimas coordenadas guardadas aunque el navegador no pueda pedirlas
+            en ese momento.
           </p>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div>
+              <Button
+                variant="secondary"
+                icon={MapPin}
+                onClick={activateLocation}
+                disabled={locating}
+                fullWidth
+              >
+                {locating
+                  ? 'Obteniendo ubicación…'
+                  : savedLocation
+                    ? 'Actualizar ubicación'
+                    : 'Activar ubicación para emergencias'}
+              </Button>
+              <p className="mt-2 text-xs text-ink-soft">
+                El navegador pedirá permiso una vez. Si lo niegas, KLAPS lo dice y no inventa
+                coordenadas.
+              </p>
+            </div>
+
+            <div className="rounded-md bg-brand-50 px-3 py-2.5">
+              {savedLocation ? (
+                <>
+                  <p className="text-sm font-semibold text-ink">
+                    {isFreshLocation(savedLocation) ? 'Ubicación lista' : 'Ubicación vencida'}
+                    <span className="font-normal text-ink-soft">
+                      {' '}
+                      · {describeLocationAge(savedLocation)}
+                    </span>
+                  </p>
+                  <p className="mt-1 font-mono text-xs text-ink-soft">
+                    {savedLocation.latitude.toFixed(5)}, {savedLocation.longitude.toFixed(5)}
+                    {Number.isFinite(Number(savedLocation.accuracy))
+                      ? ` ±${Math.round(savedLocation.accuracy)} m`
+                      : ''}
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+                    <a
+                      href={`https://www.google.com/maps?q=${savedLocation.latitude},${savedLocation.longitude}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-semibold text-brand-700 underline underline-offset-2"
+                    >
+                      Ver en el mapa
+                    </a>
+                    <button
+                      type="button"
+                      onClick={removeLocation}
+                      className="font-semibold text-ink-soft underline underline-offset-2 hover:text-danger"
+                    >
+                      Borrar ubicación
+                    </button>
+                  </div>
+                  {!isFreshLocation(savedLocation) && (
+                    <p className="mt-1 text-xs text-warning">
+                      Tiene más de 6 horas: actualízala para que la alerta la use sola.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-ink-soft">
+                  Todavía no hay ninguna ubicación guardada en este navegador.
+                </p>
+              )}
+            </div>
+          </div>
 
           <div className="mt-4">
             <Toggle
-              label="Compartir mi ubicación al pedir ayuda"
-              description="Se incluirá en el mensaje de la alerta mientras esté activado."
+              label="Incluir mi ubicación en la alerta"
+              description="Se añade al mensaje de emergencia. Nunca se comparte en segundo plano."
               checked={Boolean(preferences.shareLocation)}
               onChange={(checked) => updatePreference('shareLocation', checked)}
             />
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <Button variant="secondary" size="sm" icon={MapPin} onClick={testLocation} disabled={locating}>
-              {locating ? 'Buscando…' : 'Probar mi ubicación'}
-            </Button>
-            {location && (
-              <p className="text-sm text-ink">
-                {location.latitude.toFixed(5)}, {location.longitude.toFixed(5)} · precisión ±
-                {Math.round(location.accuracy)} m{' '}
-                <a
-                  href={`https://www.google.com/maps?q=${location.latitude},${location.longitude}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-semibold text-brand-700 underline underline-offset-2"
-                >
-                  Ver en el mapa
-                </a>
-              </p>
-            )}
-          </div>
-
           {locationError && (
-            <p className="mt-3 text-sm text-danger" role="alert">
+            <p role="alert" className="mt-3 text-sm text-danger">
               {locationError}
             </p>
           )}

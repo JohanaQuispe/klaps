@@ -1,29 +1,45 @@
 /**
  * Emergencias SOS.
  *
- * El envío real usa Telegram (Bot API) a través de `services/emergency/telegram.js`:
- * no hay backend propio, el token del bot y el destino viven en este navegador.
+ * El envío real pasa por el servidor de alertas (`telegramApi.js`): el navegador
+ * solo manda su **código de vinculación** y el texto, y el servidor decide a qué
+ * `chat_id` entregarlo con el token del bot oficial `@ai_klaps_bot`. Así el
+ * token nunca está en el frontend y cada usuario queda aislado con su contacto.
  *
- * Si Telegram no está configurado, `sendAlert` devuelve `delivered: false` con el
- * motivo: la interfaz lo muestra tal cual. Nunca se simula una alerta enviada.
+ * Si no hay vinculación o falta el servidor, `sendAlert` devuelve
+ * `delivered: false` con el motivo real: la interfaz lo muestra tal cual.
+ * Nunca se simula una alerta enviada.
  */
 
-import { isTelegramConfigured, sendTelegramMessage } from './telegram.js'
+import { isLinked } from './linkCode.js'
+import { isTelegramServerConfigured } from '../../config/telegram.js'
+import { sendAlertToContact } from './telegramApi.js'
+import { describeLocationAge, resolveEmergencyLocation } from './location.js'
 
 export const EMERGENCY_SERVICE = {
   provider: 'telegram',
   name: 'Telegram',
   reason:
-    'Configura tu bot de Telegram en esta pantalla para que la alerta llegue a tu contacto.',
+    'Vincula a tu contacto desde esta pantalla con el botón «Vincular contacto en Telegram» para que la alerta llegue.',
 }
 
-/** ¿Hay un canal real conectado? */
-export function isEmergencyChannelReady(telegram) {
-  return isTelegramConfigured(telegram)
+/** ¿Hay un contacto vinculado y un servidor configurado? */
+export function isEmergencyChannelReady(link) {
+  return isLinked(link) && isTelegramServerConfigured
 }
 
-/** Texto que se envía al contacto. */
-export function buildAlertMessage({ contactName, location, gesture = null, repeats = 0, at = Date.now() }) {
+/**
+ * Texto que se envía al contacto.
+ * `locationNote` añade la procedencia cuando las coordenadas son guardadas.
+ */
+export function buildAlertMessage({
+  contactName,
+  location,
+  locationNote = '',
+  gesture = null,
+  repeats = 0,
+  at = Date.now(),
+}) {
   const lines = ['ALERTA KLAPS · EMERGENCIA', 'Necesito ayuda inmediata.']
 
   if (contactName) lines.push(`Para: ${contactName}`)
@@ -31,10 +47,14 @@ export function buildAlertMessage({ contactName, location, gesture = null, repea
   if (gesture) lines.push(`Gesto: ${gesture}.`)
 
   if (location) {
+    const accuracy = Number.isFinite(Number(location.accuracy))
+      ? ` (±${Math.round(location.accuracy)} m)`
+      : ''
     lines.push(
-      `Ubicación: ${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)} (±${Math.round(location.accuracy ?? 0)} m).`,
+      `Ubicación: ${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}${accuracy}.`,
     )
     lines.push(`https://www.google.com/maps?q=${location.latitude},${location.longitude}`)
+    if (locationNote) lines.push(`Referencia: ${locationNote}.`)
   } else {
     lines.push('Ubicación: no disponible (sin autorización).')
   }
@@ -44,74 +64,62 @@ export function buildAlertMessage({ contactName, location, gesture = null, repea
 }
 
 /**
- * Pide la ubicación al navegador.
- * Nunca se llama sin una acción explícita del usuario.
+ * Ubicación de la alerta: la del momento o, si falla, la que se guardó desde
+ * `/emergencia`. Devuelve además la nota que acompaña al mensaje.
  */
-export function requestLocation({ timeout = 9000 } = {}) {
-  return new Promise((resolve) => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      resolve({ location: null, error: 'Este navegador no ofrece geolocalización.' })
-      return
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) =>
-        resolve({
-          location: {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-          },
-          error: '',
-        }),
-      (error) => {
-        const messages = {
-          1: 'No autorizaste el acceso a tu ubicación.',
-          2: 'No se pudo determinar tu ubicación en este momento.',
-          3: 'La ubicación tardó demasiado en responder.',
-        }
-        resolve({ location: null, error: messages[error.code] ?? 'No se pudo obtener la ubicación.' })
-      },
-      { enableHighAccuracy: true, timeout, maximumAge: 30000 },
-    )
-  })
+export async function prepareAlertLocation({ timeout } = {}) {
+  const result = await resolveEmergencyLocation({ timeout })
+  return {
+    location: result.location,
+    note: result.source === 'saved' ? `ubicación guardada ${describeLocationAge(result.location)}` : '',
+    source: result.source,
+    error: result.error,
+  }
 }
 
 /**
  * Envío real. Devuelve el estado verdadero, no un éxito simulado.
  *
- * @param {{message: string, contact?: object, telegram?: object}} params
+ * @param {{message: string, contact?: object, link?: object}} params
  */
-export async function sendAlert({ message, contact = null, telegram = null }) {
+export async function sendAlert({ message, contact = null, link = null }) {
   const attemptedAt = Date.now()
 
-  if (!isTelegramConfigured(telegram)) {
+  if (!isTelegramServerConfigured) {
     return {
       delivered: false,
       channel: 'ninguno',
       reason:
-        'No hay ningún canal conectado todavía. Configura tu bot de Telegram y el contacto en la pantalla de emergencia: sin eso, la alerta no sale de este dispositivo.',
+        'Esta instalación no tiene servidor de alertas configurado (VITE_TELEGRAM_API_URL), así que el mensaje no puede salir del navegador. El token del bot vive en el servidor, nunca aquí.',
       attemptedAt,
       message,
     }
   }
 
-  const response = await sendTelegramMessage({
-    token: telegram.token,
-    chatId: telegram.chatId,
-    text: message,
-  })
+  if (!isLinked(link)) {
+    return {
+      delivered: false,
+      channel: 'ninguno',
+      reason:
+        'No hay ningún contacto vinculado todavía. Pulsa «Vincular contacto en Telegram» en la pantalla de emergencia y espera a que tu familiar pulse Iniciar: sin eso la alerta no sale de este dispositivo.',
+      attemptedAt,
+      message,
+    }
+  }
+
+  const response = await sendAlertToContact({ code: link.code, text: message })
 
   return {
     delivered: response.delivered,
     channel: 'telegram',
     reason: response.delivered
-      ? `Enviada por Telegram a ${telegram.chatName || telegram.chatId}.`
+      ? `Enviada por Telegram a ${link.chatName || 'tu contacto vinculado'}.`
       : response.reason,
     messageId: response.messageId,
-    attemptAt: attemptedAt,
     attemptedAt,
     contact,
     message,
   }
 }
+
+export { requestLocation } from './location.js'

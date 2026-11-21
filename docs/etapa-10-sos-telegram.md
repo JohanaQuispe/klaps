@@ -5,19 +5,19 @@ mandan un mensaje al contacto configurado a través de un bot de Telegram.
 
 > Sin canal configurado **no se simula nada**: la app dice que la alerta no salió y por qué.
 
-## 1. Preparar el bot (una sola vez)
+## 1. Conectar el contacto (ya no se crea ningún bot)
 
-1. En Telegram, abre **@BotFather** y envía `/newbot`. Elige nombre y usuario; te devuelve un token
-   con la forma `123456789:AAEhBOweik…`.
-2. Abre la pantalla **Emergencia SOS** de KLAPS y pega el token en «Token del bot».
-3. El contacto de emergencia debe **abrir ese bot y enviarle `/start`** una vez. Telegram no permite
-   que un bot escriba a alguien que no lo haya iniciado; el número de teléfono no basta.
-4. Pulsa **Buscar contactos**: la app llama a `getUpdates` y lista los chats que escribieron al bot.
-   Elige el contacto y guarda.
-5. Pulsa **Enviar prueba** para confirmar que llega.
+Desde la etapa 11 la app usa el **bot oficial `@ai_klaps_bot`** y el token vive en el servidor: el
+usuario solo vincula a su familiar con un enlace y un código de sesión (`KLAPS-84920`).
 
-Todo se guarda en `localStorage['klaps.telegram.v1']` (`token`, `chatId`, `chatName`), solo en ese
-navegador.
+👉 Procedimiento completo en [`etapa-11-telegram-multiusuario.md`](etapa-11-telegram-multiusuario.md).
+
+En resumen, en `/emergencia`:
+
+1. **Vincular contacto en Telegram** (o copiar el enlace y mandarlo al familiar).
+2. La persona abre el bot y pulsa **Iniciar** → se envía `/start KLAPS-84920`.
+3. **Verificar vinculación** → la app confirma «Vinculado a …».
+4. **Enviar prueba** para comprobar que llega.
 
 ## 2. Seña física de auxilio (sin entrenamiento)
 

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Bluetooth, MonitorSmartphone, ScanLine, ShieldCheck } from 'lucide-react'
+import { ArrowRight, Bluetooth, MonitorSmartphone, ScanLine } from 'lucide-react'
 import PageHeader from '../../components/layout/PageHeader'
 import Card from '../../components/common/Card'
 import Button from '../../components/common/Button'
@@ -39,19 +39,6 @@ export default function Devices() {
           />
         }
       />
-
-      <Card tone="mint" padding="md" className="mb-5 flex items-start gap-3">
-        <ShieldCheck className="mt-0.5 size-5 shrink-0 text-success" aria-hidden="true" />
-        <div>
-          <p className="font-display font-bold text-brand-800">Conexión real, sin datos simulados</p>
-          <p className="mt-1 text-sm text-ink">
-            Batería, modelo y firmware se leen directamente del dispositivo. Si un dato no está
-            publicado, la tarjeta lo indica como <strong>sin lectura</strong> — no se inventa nada.
-            La lectura de los sensores flex y del MPU6050 se activa al configurar sus UUID en{' '}
-            <code>services/bluetooth/bleConfig.js</code>.
-          </p>
-        </div>
-      </Card>
 
       {bluetoothNotice && (
         <ErrorMessage
