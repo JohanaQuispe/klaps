@@ -43,9 +43,11 @@ import {
   verifyLinkage,
 } from '../../services/emergency/telegramApi.js'
 import {
+  TELEGRAM_API_URL,
   TELEGRAM_BOT_LABEL,
   buildTelegramDeepLink,
   isTelegramServerConfigured,
+  telegramEndpointIssue,
 } from '../../config/telegram.js'
 import {
   clearSavedLocation,
@@ -511,6 +513,23 @@ export default function Emergency() {
             . No tienes que crear ningún bot ni pegar contraseñas: vinculas a tu familiar con un
             enlace y su chat queda asociado solo a tu código.
           </p>
+
+          {telegramEndpointIssue && (
+            <p role="alert" className="mt-3 rounded-md bg-danger-soft px-3 py-2.5 text-sm text-danger">
+              <strong className="font-semibold">La URL del servidor tiene un problema.</strong>{' '}
+              {telegramEndpointIssue}{' '}
+              <span className="block text-xs text-ink-soft">
+                Valor leído de <code>VITE_TELEGRAM_API_URL</code>:{' '}
+                <code className="break-all">{TELEGRAM_API_URL}</code>
+              </span>
+            </p>
+          )}
+
+          {isTelegramServerConfigured && !telegramEndpointIssue && (
+            <p className="mt-3 rounded-md bg-brand-50 px-3 py-2 text-xs break-all text-ink-soft">
+              Servidor de alertas: <code>{TELEGRAM_API_URL}</code>
+            </p>
+          )}
 
           {!isTelegramServerConfigured && (
             <p role="alert" className="mt-3 rounded-md bg-warning-soft px-3 py-2.5 text-sm text-ink">

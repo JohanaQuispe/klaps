@@ -187,3 +187,30 @@ Con el servidor desplegado:
 4. **Activar ubicación para emergencias** → acepta el permiso del navegador.
 5. `/traducir` → **Iniciar detección** → agita el guante 3 veces → cuenta atrás de 10 s → mensaje
    con coordenadas.
+
+---
+
+## 10. Problemas frecuentes al desplegar
+
+| Síntoma | Causa | Arreglo |
+| --- | --- | --- |
+| **«La función del servidor no existe (404)»** | la URL no es la de la función, la función no está desplegada o el proyecto se estaba restaurando | comprobar que `VITE_TELEGRAM_API_URL` sea `https://<ref>.supabase.co/functions/v1/klaps-telegram` (la app muestra ahora la URL exacta que llama) |
+| La migración figura en el historial pero la tabla no existe | se aplicó mientras el proyecto estaba `COMING_UP` (restauración) y el DDL no llegó a persistir | volver a aplicarla y comprobar `select to_regclass('public.telegram_links');` |
+| «Falta el secreto TELEGRAM_BOT_TOKEN en el servidor.» | secreto no creado o creado en otro proyecto | *Edge Functions → Secrets* o `supabase secrets set` |
+| «Telegram rechazó la petición (Unauthorized)» | token revocado o mal copiado | `/revoke` en @BotFather y actualizar el secreto |
+| «Todavía nadie abrió el enlace con ese código.» | no se pulsó **Iniciar**, o pasaron más de 24 h desde el mensaje | repetir el enlace y verificar en el día |
+
+### Comprobar el endpoint sin abrir la app
+
+```powershell
+curl.exe -i -X POST "https://<ref>.supabase.co/functions/v1/klaps-telegram" `
+  -H "Content-Type: application/json" `
+  -d "{\"action\":\"verify\",\"code\":\"KLAPS-12345\"}"
+```
+
+| Respuesta | Significado |
+| --- | --- |
+| `200` + `{"ok":true,"linked":false,...}` | ✅ la función está viva; falta que alguien abra el enlace |
+| `404` | la función no está desplegada en ese proyecto o la URL no es la correcta |
+| `500` «Falta el secreto…» | falta `TELEGRAM_BOT_TOKEN` |
+| `401` | `verify_jwt` está activado: desplegar con `--no-verify-jwt` |

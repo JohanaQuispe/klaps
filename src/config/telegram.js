@@ -26,6 +26,33 @@ export const TELEGRAM_API_URL = String(env.VITE_TELEGRAM_API_URL ?? '')
 /** ¿Esta instalación tiene servidor de alertas? Sin esto no se puede vincular ni enviar. */
 export const isTelegramServerConfigured = Boolean(TELEGRAM_API_URL)
 
+/**
+ * Diagnóstico de la URL configurada. Devuelve `''` si tiene buena pinta o el
+ * motivo concreto del fallo más común: apuntar a la raíz del proyecto en vez de
+ * a la función (eso da 404 aunque el servidor exista).
+ */
+export const telegramEndpointIssue = (() => {
+  if (!TELEGRAM_API_URL) return ''
+
+  let url
+  try {
+    url = new URL(TELEGRAM_API_URL)
+  } catch {
+    return 'La URL del servidor no es válida. Debe empezar por https:// y no llevar espacios.'
+  }
+
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    return 'La URL del servidor debe empezar por https://'
+  }
+  if (url.pathname.includes('[') || url.pathname.includes(']') || url.pathname.includes('(')) {
+    return 'La URL parece pegada con formato de enlace (corchetes o paréntesis). Copia solo la dirección.'
+  }
+  if (!url.pathname.includes('/functions/v1/')) {
+    return 'A la URL le falta /functions/v1/klaps-telegram: así apunta a la raíz del proyecto y responde 404.'
+  }
+  return ''
+})()
+
 /** Enlace que abre el bot con el código de vinculación ya escrito. */
 export function buildTelegramDeepLink(code) {
   if (!code) return ''
