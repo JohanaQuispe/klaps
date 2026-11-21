@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Accessibility, ArrowRight, AudioLines, FlaskConical, HandHelping } from 'lucide-react'
+import { Accessibility, ArrowRight, AudioLines, HandHelping } from 'lucide-react'
 import Button from '../../components/common/Button'
 import Logo from '../../components/brand/Logo'
 import DecorativeRings from '../../components/brand/DecorativeRings'
@@ -100,14 +100,6 @@ export default function Welcome() {
             ))}
           </ul>
 
-          <p className="mt-6 flex items-start gap-2 text-xs leading-relaxed text-ink-soft">
-            <FlaskConical className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
-            <span>
-              KLAPS está en desarrollo. Los guantes se conectan por{' '}
-              <strong className="font-semibold">Bluetooth LE</strong> desde tu navegador; lo que no
-              esté publicado por el dispositivo se muestra como «sin lectura», nunca simulado.
-            </span>
-          </p>
         </div>
 
         {/* Ilustración oficial de KLAPS */}

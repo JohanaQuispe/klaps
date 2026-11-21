@@ -37,10 +37,15 @@ import { loadTraining } from '../../services/gesture/trainingStore.js'
 import {
   buildAlertMessage,
   isEmergencyChannelReady,
-  requestLocation,
   sendAlert,
 } from '../../services/emergency/sos.js'
-import { loadTelegramConfig } from '../../services/emergency/telegram.js'
+import { loadLink } from '../../services/emergency/linkCode.js'
+import {
+  describeLocationAge,
+  isFreshLocation,
+  loadSavedLocation,
+  resolveEmergencyLocation,
+} from '../../services/emergency/location.js'
 import { HELP_MIN_IMPULSES } from '../../services/emergency/helpSignal.js'
 import { formatRelativeTime } from '../../utils/format.js'
 
@@ -71,17 +76,17 @@ export default function Translation() {
 
   // ── SOS por 3 repeticiones + Telegram ──
   const { preferences } = useAccessibility()
-  const [telegram, setTelegram] = useState(loadTelegramConfig)
+  const [link, setLink] = useState(loadLink)
   const [sosCount, setSosCount] = useState(0)
   const [sosPrompt, setSosPrompt] = useState(null)
   const [sosLocation, setSosLocation] = useState(null)
   const sosTimesRef = useRef([])
 
-  const channelReady = isEmergencyChannelReady(telegram)
+  const channelReady = isEmergencyChannelReady(link)
 
-  // La configuración de Telegram puede cambiar en otra pantalla.
+  // La vinculación puede cambiar en otra pantalla o pestaña.
   useEffect(() => {
-    const refresh = () => setTelegram(loadTelegramConfig())
+    const refresh = () => setLink(loadLink())
     window.addEventListener('focus', refresh)
     window.addEventListener('storage', refresh)
     return () => {
@@ -118,7 +123,9 @@ export default function Translation() {
     speak('Emergencia')
 
     if (preferences.shareLocation) {
-      requestLocation().then((response) => setSosLocation(response.location))
+      // Si el navegador no puede dar la ubicación ahora (o tarda más que la
+      // cuenta atrás), se usa la que se autorizó y guardó en /emergencia.
+      resolveEmergencyLocation().then((result) => setSosLocation(result.location))
     }
   }, [channelReady, preferences.shareLocation, speak])
 
@@ -194,9 +201,15 @@ export default function Translation() {
   })
 
   const sendSos = useCallback(async () => {
+    const stored = loadSavedLocation()
+    const location = sosLocation ?? (isFreshLocation(stored) ? stored : null)
+    const locationNote =
+      !sosLocation && location ? `ubicación guardada ${describeLocationAge(location)}` : ''
+
     const message = buildAlertMessage({
-      contactName: preferences.emergencyContact?.name,
-      location: sosLocation,
+      contactName: preferences.emergencyContact?.name || link.chatName,
+      location,
+      locationNote,
       repeats: SOS_REPEATS,
     })
 
@@ -205,13 +218,13 @@ export default function Translation() {
     const response = await sendAlert({
       message,
       contact: preferences.emergencyContact,
-      telegram,
+      link,
     })
 
     setSosPrompt((previous) =>
       previous ? { ...previous, phase: 'done', result: response, message } : previous,
     )
-  }, [preferences, sosLocation, telegram])
+  }, [link, preferences, sosLocation])
 
   // Cuenta atrás del aviso automático (el envío ocurre en el temporizador).
   useEffect(() => {
@@ -491,7 +504,7 @@ export default function Translation() {
                 {sosSign.origin === 'physical'
                   ? `Vaivén de auxilio (${sosSign.count ?? 1} de ${SOS_REPEATS}). Agita el guante ${SOS_REPEATS} veces en 15 segundos para que la alerta se envíe sola`
                   : `Se reconoció «${sosSign.label}» (${sosSign.count ?? 1} de ${SOS_REPEATS}). Repite la seña ${SOS_REPEATS} veces en 15 segundos para que la alerta se envíe sola`}
-                {channelReady ? ` a ${telegram.chatName || 'tu contacto'}.` : '.'}
+                {channelReady ? ` a ${link.chatName || 'tu contacto'}.` : '.'}
               </p>
             </div>
             <div className="flex gap-2">
@@ -576,7 +589,7 @@ export default function Translation() {
             </p>
             <p className="mt-2 text-sm text-ink">
               Se enviará por Telegram a{' '}
-              <strong>{telegram.chatName || preferences.emergencyContact?.name || telegram.chatId}</strong>
+              <strong>{link.chatName || preferences.emergencyContact?.name || 'tu contacto'}</strong>
               {sosLocation ? ' con tu ubicación aproximada.' : '.'}
             </p>
             {!sosLocation && preferences.shareLocation && (

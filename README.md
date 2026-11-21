@@ -169,7 +169,8 @@ Instrucciones completas en `public/brand/LEEME.md` y `public/illustrations/LEEME
 - `docs/etapa-7-senas-dinamicas.md` — señas estáticas/dinámicas, modo de mano y ventana deslizante.
 - `docs/etapa-8-prioridad-movimiento-y-reposo.md` — 40/80 fotogramas, ponderación IMU y estado «0».
 - `docs/etapa-9-calibracion-guiada.md` — asistente de calibración de dedos e IMU (`klaps.calibration.v1`).
-- `docs/etapa-10-sos-telegram.md` — SOS real por Telegram: bot, contacto, 3 repeticiones y cuenta atrás.
+- `docs/etapa-10-sos-telegram.md` — SOS real por Telegram: seña, 3 repeticiones y cuenta atrás.
+- `docs/etapa-11-telegram-multiusuario.md` — bot oficial `@ai_klaps_bot`, código de vinculación, servidor sin token en el navegador y ubicación autorizada.
 - `docs/ble-conexion.md` — guía para conectar los guantes ESP32-D/ESP32-U por BLE.
 - `docs/como-ejecutar.md` — arrancar la app, comprobar el build y resolver fallos comunes.
 - `docs/firmware/prueba-ble/prueba-ble.ino` — sketch de prueba que anuncia `KLAPS-TEST` para validar la radio BLE.
