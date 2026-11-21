@@ -51,8 +51,7 @@ async function callServer(action, payload) {
         return {
           ok: false,
           data,
-          error:
-            'La función del servidor no existe (404). Revisa VITE_TELEGRAM_API_URL y que la función esté desplegada.',
+          error: `La función del servidor no existe (404) en ${TELEGRAM_API_URL}. Comprueba que la URL termine en /functions/v1/klaps-telegram y que la función esté desplegada en el proyecto.`,
         }
       }
       return {
