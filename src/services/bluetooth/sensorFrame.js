@@ -171,9 +171,9 @@ export function describeFrameContent(frame, byteLength = 0) {
 
 /**
  * Regla física del estado «0» (reposo):
- * los cuatro dedos principales cerrados (flex ≥ 75 %) y la palma hacia abajo
- * (az ≤ −7,5 m/s²). Es la mitad de la activación dual; la otra mitad es que el
- * KNN reconozca una seña llamada 0 / REPOSO / PAUSA.
+ * Dedos activos cerrados (flex ≥ 75 %) y la palma hacia abajo (az ≤ −7,5 m/s²).
+ * Si un dedo tiene el sensor dañado o desconectado (marca ≤ 5 %), no bloquea
+ * la detección del puño, evaluando los demás dedos activos (mínimo 2).
  */
 export const REST_FLEX_THRESHOLD = 75
 export const REST_ACCEL_THRESHOLD = -7.5
@@ -183,10 +183,17 @@ export const REST_FINGERS = 4
 export function isRestHand(reading) {
   if (!reading?.flex || !reading?.imu) return false
 
-  const fingers = reading.flex.slice(0, REST_FINGERS)
-  if (fingers.length < REST_FINGERS) return false
+  const allFingers = reading.flex.slice(0, 5)
+  // Dedos activos que registran señal por encima del umbral de desconexión (> 5 %)
+  const activeFingers = allFingers.filter((val) => Number.isFinite(val) && val > 5)
 
-  const closed = fingers.every((value) => Number.isFinite(value) && value >= REST_FLEX_THRESHOLD)
+  // Si hay al menos 2 dedos activos (ej. pulgar, índice, medio), todos los activos deben estar cerrados.
+  // Si no hay suficientes dedos activos, se aplica la regla estándar sobre los dedos disponibles.
+  const closed =
+    activeFingers.length >= 2
+      ? activeFingers.every((value) => value >= REST_FLEX_THRESHOLD)
+      : allFingers.slice(0, REST_FINGERS).every((value) => Number.isFinite(value) && value >= REST_FLEX_THRESHOLD)
+
   // La orientación se mide sobre la lectura sin calibrar: es una regla física.
   const az = reading.rawImu?.az ?? reading.imu.az
   const pointingDown = Number.isFinite(az) && az <= REST_ACCEL_THRESHOLD

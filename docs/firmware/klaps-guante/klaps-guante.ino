@@ -118,6 +118,7 @@ bool deviceConnected = false;
 bool mpuAvailable = false;
 
 SensorFrame currentFrame;
+int rawFlexADC[5] = {0, 0, 0, 0, 0}; // Lecturas crudas del ADC (0-4095) para diagnóstico
 unsigned long lastSampleTime = 0;
 unsigned long lastSerialPrintTime = 0;
 const unsigned long SAMPLE_INTERVAL_MS = 50; // 20 Hz = 1 muestra cada 50 ms
@@ -236,6 +237,7 @@ int16_t readFlex(int index) {
     delayMicroseconds(60);
   }
   const int raw = (int)(sum / 4);
+  rawFlexADC[index] = raw;
 
   // Si el pin marca cerca de 0, el sensor está desconectado o el circuito abierto
   if (raw <= ADC_DISCONNECTED_THRESHOLD) {
@@ -372,18 +374,20 @@ void loop() {
     if (currentMillis - lastSerialPrintTime >= 1000) {
       lastSerialPrintTime = currentMillis;
 
-      Serial.printf("[%s] Flex %% [P:%3d, I:%3d, M:%3d, A:%3d, m:%3d] | IMU: ax=%5.1f ay=%5.1f az=%5.1f m/s² | gx=%4.1f gy=%4.1f gz=%4.1f rad/s | BLE: %s\n",
+      Serial.printf("[%s] Flex %% [P:%3d, I:%3d, M:%3d, A:%3d, m:%3d] | Raw ADC [P:%4d, I:%4d, M:%4d, A:%4d, m:%4d] | IMU: az=%5.1f m/s² | BLE: %s\n",
         DEVICE_NAME,
         currentFrame.flex[0], currentFrame.flex[1], currentFrame.flex[2], currentFrame.flex[3], currentFrame.flex[4],
-        currentFrame.ax, currentFrame.ay, currentFrame.az,
-        currentFrame.gx, currentFrame.gy, currentFrame.gz,
+        rawFlexADC[0], rawFlexADC[1], rawFlexADC[2], rawFlexADC[3], rawFlexADC[4],
+        currentFrame.az,
         deviceConnected ? "CONECTADO" : "ANUNCIANDO"
       );
 
       // Aviso si alguno de los sensores marca 0 %
       if (anyFlexZero) {
         Serial.println("⚠️  AVISO DE HARDWARE: Uno o más sensores flex marcan 0 %.");
-        Serial.println("   Revisa: pin desconectado, cable suelto, o el dedo está en reposo totalmente recto.");
+        if (rawFlexADC[3] <= ADC_DISCONNECTED_THRESHOLD) {
+          Serial.println("   -> Dedo Anular (GPIO 35) marca Raw=0: revisa cable suelto o terminal del sensor casero.");
+        }
       }
 
       if (!mpuAvailable) {
