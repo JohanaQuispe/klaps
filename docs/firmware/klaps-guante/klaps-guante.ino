@@ -351,10 +351,16 @@ void loop() {
     }
 
     // 11.2 Lectura de la IMU MPU-6050 (m/s² y rad/s)
-    readMPU6050(
-      currentFrame.ax, currentFrame.ay, currentFrame.az,
-      currentFrame.gx, currentFrame.gy, currentFrame.gz
-    );
+    // Se usan variables locales para evitar el error de referencia en estructuras empaquetadas (packed)
+    float ax = 0.0f, ay = 0.0f, az = 0.0f;
+    float gx = 0.0f, gy = 0.0f, gz = 0.0f;
+    readMPU6050(ax, ay, az, gx, gy, gz);
+    currentFrame.ax = ax;
+    currentFrame.ay = ay;
+    currentFrame.az = az;
+    currentFrame.gx = gx;
+    currentFrame.gy = gy;
+    currentFrame.gz = gz;
 
     // 11.3 Publicar la trama si hay un cliente conectado
     if (deviceConnected && pSensorsChar != nullptr) {
