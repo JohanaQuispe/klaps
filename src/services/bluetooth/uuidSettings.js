@@ -1,12 +1,13 @@
 /**
  * Configuración de UUID del firmware, compartida por la app.
- * Se guarda en localStorage para no tocar código al cambiar de placa.
+ * Se guarda en localStorage para permitir personalizaciones por placa,
+ * con respaldo automático a los UUID oficiales de bleConfig.js.
  */
+
+import { BLE_CONFIG } from './bleConfig.js'
 
 const SERVICE_KEY = 'klaps.ble.serviceUuid'
 const SENSORS_KEY = 'klaps.ble.sensorsUuid'
-
-const EMPTY = { service: '', sensors: '' }
 
 /**
  * Normaliza un UUID pegado desde el firmware.
@@ -31,14 +32,22 @@ export function isValidUuid(value = '') {
 }
 
 export function loadUuidSettings() {
-  if (typeof window === 'undefined') return { ...EMPTY }
+  const fallback = {
+    service: BLE_CONFIG.UUID.service || '',
+    sensors: BLE_CONFIG.UUID.sensors || '',
+  }
+
+  if (typeof window === 'undefined') return fallback
   try {
+    const savedService = window.localStorage.getItem(SERVICE_KEY)
+    const savedSensors = window.localStorage.getItem(SENSORS_KEY)
+
     return {
-      service: window.localStorage.getItem(SERVICE_KEY) ?? '',
-      sensors: window.localStorage.getItem(SENSORS_KEY) ?? '',
+      service: savedService && isValidUuid(savedService) ? savedService : fallback.service,
+      sensors: savedSensors && isValidUuid(savedSensors) ? savedSensors : fallback.sensors,
     }
   } catch {
-    return { ...EMPTY }
+    return fallback
   }
 }
 
