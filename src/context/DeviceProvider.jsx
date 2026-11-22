@@ -210,6 +210,7 @@ export default function DeviceProvider({ children }) {
       const bytes = session.lastPacket?.bytes?.length ?? 0
       return {
         ...glove,
+        reading,
         sensorsListening: (session.subscriptions ?? []).length > 0,
         frameIssue: bytes > 0 && !reading ? `Trama de ${bytes} bytes; se esperaban 34.` : '',
       }
