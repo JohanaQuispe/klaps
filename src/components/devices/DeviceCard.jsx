@@ -106,9 +106,42 @@ export default function DeviceCard({
             )}
 
             {glove.sensorsListening && glove.frames > 0 && !glove.frameIssue && (
-              <p className="mt-1 text-[0.7rem] leading-snug text-success">
-                Recibiendo la trama de 34 bytes.
-              </p>
+              <div className="mt-2 space-y-1.5 border-t border-brand-100 pt-2">
+                <div className="flex items-center justify-between text-[0.7rem] font-semibold text-brand-800">
+                  <span>Flexión en vivo</span>
+                  <span className="font-normal text-success">34 bytes · 20 Hz</span>
+                </div>
+                <div className="grid grid-cols-5 gap-1.5 text-center text-[0.68rem]">
+                  {[
+                    { label: 'Pul', title: 'Pulgar (GPIO 36)' },
+                    { label: 'Índ', title: 'Índice (GPIO 39)' },
+                    { label: 'Med', title: 'Medio (GPIO 34)' },
+                    { label: 'Anu', title: 'Anular (GPIO 35)' },
+                    { label: 'Meñ', title: 'Meñique (GPIO 32)' },
+                  ].map((finger, i) => {
+                    const val = Math.round(glove.reading?.flex?.[i] ?? 0)
+                    const isInactiveRing = i === 3 && val === 0
+                    return (
+                      <div
+                        key={i}
+                        title={finger.title}
+                        className={cn(
+                          'rounded p-1 transition-colors',
+                          isInactiveRing ? 'bg-brand-50/60 text-ink-soft' : 'bg-brand-50 text-ink',
+                        )}
+                      >
+                        <span className="block text-[0.62rem] text-ink-soft">{finger.label}</span>
+                        <span className="font-bold">{val}%</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                {glove.reading?.imu && (
+                  <p className="font-mono text-[0.65rem] text-ink-soft">
+                    az: {glove.reading.imu.az.toFixed(1)} m/s² · gx: {glove.reading.imu.gx.toFixed(1)} rad/s
+                  </p>
+                )}
+              </div>
             )}
 
             {glove.frameIssue && (

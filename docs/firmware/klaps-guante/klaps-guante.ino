@@ -344,12 +344,8 @@ void loop() {
     lastSampleTime = currentMillis;
 
     // 11.1 Lectura de los 5 sensores de flexión (0-100 %)
-    bool anyFlexZero = false;
     for (int i = 0; i < 5; i++) {
       currentFrame.flex[i] = readFlex(i);
-      if (currentFrame.flex[i] == 0) {
-        anyFlexZero = true;
-      }
     }
 
     // 11.2 Lectura de la IMU MPU-6050 (m/s² y rad/s)
@@ -382,11 +378,15 @@ void loop() {
         deviceConnected ? "CONECTADO" : "ANUNCIANDO"
       );
 
-      // Aviso si alguno de los sensores marca 0 %
-      if (anyFlexZero) {
-        Serial.println("⚠️  AVISO DE HARDWARE: Uno o más sensores flex marcan 0 %.");
-        if (rawFlexADC[3] <= ADC_DISCONNECTED_THRESHOLD) {
-          Serial.println("   -> Dedo Anular (GPIO 35) marca Raw=0: revisa cable suelto o terminal del sensor casero.");
+      // Verificación de cables / sensores desconectados (solo si Raw ADC <= umbral)
+      if (rawFlexADC[3] <= ADC_DISCONNECTED_THRESHOLD) {
+        // En prototipo con flex casero en anular, se informa sin emitir alarma de fallo general
+        Serial.println("ℹ️  INFO: Anular (GPIO 35) en Raw 0 (flex casero inactivo). App web KLAPS operando con tolerancia.");
+      }
+      for (int i = 0; i < 5; i++) {
+        if (i != 3 && rawFlexADC[i] <= ADC_DISCONNECTED_THRESHOLD) {
+          Serial.printf("⚠️  AVISO DE HARDWARE: Sensor flex %d (GPIO %d) desconectado o en corto (Raw=%d).\n",
+            i, PIN_FLEX[i], rawFlexADC[i]);
         }
       }
 

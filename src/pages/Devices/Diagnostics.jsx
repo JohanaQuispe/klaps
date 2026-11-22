@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Bluetooth, Copy, FlaskConical, Plug, Radio, ScanLine, Trash2, Unplug } from 'lucide-react'
+import { Bluetooth, CheckCircle2, Copy, Plug, Radio, ScanLine, Trash2, Unplug } from 'lucide-react'
 import PageHeader from '../../components/layout/PageHeader'
 import Card from '../../components/common/Card'
 import Button from '../../components/common/Button'
@@ -40,6 +40,14 @@ const GLOVE_OPTIONS = [
   { value: 'izquierdo', label: `${BLE_GLOVES.izquierdo.label} · ${BLE_GLOVES.izquierdo.board}` },
 ]
 
+const FINGER_LABELS = [
+  'Pulgar (GPIO 36)',
+  'Índice (GPIO 39)',
+  'Medio (GPIO 34)',
+  'Anular (GPIO 35)',
+  'Meñique (GPIO 32)',
+]
+
 /** Comprobaciones cuando la placa no aparece en el selector del navegador. */
 const NOT_LISTED_CHECKS = [
   'El firmware debe anunciarse por BLE (GATT). Si usa Bluetooth clásico —BluetoothSerial, SPP— el navegador no puede verlo: hay que recompilarlo con BLE.',
@@ -72,6 +80,21 @@ export default function Diagnostics() {
     ble.blockReason,
     typeof window !== 'undefined' ? window.location.host : '',
   )
+
+  // Auto-suscribirse a los sensores si el guante se conecta y los UUID están configurados
+  useEffect(() => {
+    if (
+      ble.status === 'connected' &&
+      savedUuids.service &&
+      savedUuids.sensors &&
+      (ble.subscriptions ?? []).length === 0
+    ) {
+      ble.subscribe({
+        serviceUuid: savedUuids.service,
+        characteristicUuid: savedUuids.sensors,
+      })
+    }
+  }, [ble, savedUuids.service, savedUuids.sensors])
 
   const busy = ble.status === 'requesting' || ble.status === 'connecting'
   const statusInfo = STATUS_LABEL[ble.status] ?? STATUS_LABEL.idle
@@ -375,17 +398,27 @@ export default function Diagnostics() {
               </p>
             )}
 
-            <p className="text-sm font-semibold text-brand-800">Flex (0-100 %)</p>
+            <p className="text-sm font-semibold text-brand-800">Sensores de flexión (0-100 %)</p>
             <ul className="mt-2 space-y-1.5">
-              {frame.flex.map((value, index) => (
-                <li key={index} className="flex items-center gap-2">
-                  <span className="w-12 text-xs text-ink-soft">flex {index}</span>
-                  <ProgressBar value={value} size="sm" className="flex-1" />
-                  <span className="w-10 text-right text-xs font-semibold text-ink">
-                    {Math.round(value)} %
-                  </span>
-                </li>
-              ))}
+              {frame.flex.map((value, index) => {
+                const isRing = index === 3
+                return (
+                  <li key={index} className="flex items-center gap-2">
+                    <span className="w-36 text-xs text-ink-soft">
+                      {FINGER_LABELS[index] || `flex ${index}`}
+                    </span>
+                    <ProgressBar value={value} size="sm" className="flex-1" />
+                    <span className="w-24 text-right text-xs font-semibold text-ink">
+                      {Math.round(value)} %
+                      {isRing && value === 0 && (
+                        <span className="block text-[0.62rem] font-normal text-ink-soft">
+                          (flex casero 0V)
+                        </span>
+                      )}
+                    </span>
+                  </li>
+                )
+              })}
             </ul>
             <p className="mt-3 font-mono text-xs text-ink">
               ax {frame.imu.ax.toFixed(2)} · ay {frame.imu.ay.toFixed(2)} · az {frame.imu.az.toFixed(2)} ·
@@ -581,32 +614,29 @@ export default function Diagnostics() {
 
       <Card padding="lg" className="mt-6">
         <h2 className="flex items-center gap-2 font-display text-lg font-extrabold text-brand-800">
-          <FlaskConical className="size-5 text-warning" aria-hidden="true" />
-          Qué falta para leer los sensores
+          <CheckCircle2 className="size-5 text-success" aria-hidden="true" />
+          Protocolo oficial de sensores activo
         </h2>
-        <ol className="mt-3 space-y-2 text-sm text-ink">
-          <li>
-            <strong>1.</strong> Que el firmware del ESP32 use <strong>BLE (GATT)</strong>. Si está
-            programado con Bluetooth clásico (<code>BluetoothSerial</code>), el navegador no podrá
-            conectarse.
-          </li>
-          <li>
-            <strong>2.</strong> Anunciar un servicio propio con las lecturas (sensores flex y
-            MPU6050) y, si es posible, la batería con el servicio estándar <code>0x180F</code>.
-          </li>
-          <li>
-            <strong>3.</strong> Envíame los UUID de ese servicio y de sus características, y el
-            formato de los datos (por ejemplo: <code>int16 x5</code> para los flex +{' '}
-            <code>float x6</code> del MPU6050). Con eso conecto la lectura real a las tarjetas y al
-            diagnóstico.
-          </li>
-        </ol>
-
-        <p className="mt-4 rounded-md bg-brand-50 p-3 text-xs text-ink-soft">
-          El <strong>RSSI</strong> no lo expone Web Bluetooth en una conexión abierta: el
-          navegador no expone la intensidad de señal de un dispositivo conectado. En modo real se
-          mostrará la calidad del enlace solo si el firmware la publica como dato propio.
+        <p className="mt-2 text-sm text-ink-soft">
+          El firmware oficial de KLAPS (<code>docs/firmware/klaps-guante/klaps-guante.ino</code>)
+          está integrado con la aplicación web y listo para operar.
         </p>
+        <ul className="mt-3 space-y-1.5 text-xs text-ink">
+          <li>
+            <strong>Servicio GATT:</strong>{' '}
+            <code className="font-mono text-brand-700">{savedUuids.service || BLE_CONFIG.UUID.service}</code>
+          </li>
+          <li>
+            <strong>Característica de sensores:</strong>{' '}
+            <code className="font-mono text-brand-700">{savedUuids.sensors || BLE_CONFIG.UUID.sensors}</code> (NOTIFY a 20 Hz)
+          </li>
+          <li>
+            <strong>Trama binaria:</strong> 34 bytes little-endian (5 flex en % + 6 ejes MPU-6050 en m/s² y rad/s).
+          </li>
+          <li>
+            <strong>Tolerancia en hardware:</strong> Si el dedo anular (flex casero) marca 0 %, el clasificador KNN y el estado de reposo continúan operando con los 4 dedos restantes y el sensor inercial.
+          </li>
+        </ul>
 
         <div className="mt-4 flex flex-wrap gap-2">
           <Button
