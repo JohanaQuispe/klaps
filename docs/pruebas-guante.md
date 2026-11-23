@@ -136,8 +136,9 @@ Una vez entrenadas las 3 señas, se ejecuta la prueba formal de validación del 
 2. Pulsa el botón principal **«Iniciar detección»**.
 3. Realiza **10 repeticiones independientes** de cada una de las 3 señas, volviendo a la postura de reposo entre cada intento.
 4. **Criterios de acierto:**
-   - **Reconocimiento:** El clasificador debe mostrar la seña correcta con una confianza calculada $\ge 75\%$.
-   - **Estabilidad:** La predicción debe sostenerse durante la ventana temporal de 600 ms (12 fotogramas).
+   - **Reconocimiento:** El clasificador debe mostrar la seña correcta con una confianza calculada $\ge 85\%$ y sin ambigüedad con segundas candidatas.
+   - **Estabilidad (Hold Time):** La predicción debe sostenerse de manera continua durante la ventana temporal de estabilización (1.3 s en modo Normal o 1.8 s en modo Preciso).
+   - **Pausa entre señas (Cooldown):** Periodo de 1.8 s tras emitir para relajar la mano y evitar repeticiones accidentales o encadenamientos no deseados.
    - **Salida multimodal:** La palabra debe aparecer en la pantalla y reproducirse por los altavoces mediante la síntesis de voz (Web Speech API).
 
 ### Hoja de Registro de Pruebas (Plantilla para el Informe):

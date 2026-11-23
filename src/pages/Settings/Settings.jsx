@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Accessibility, ArrowRight, Play, RotateCcw, Volume2 } from 'lucide-react'
+import { Accessibility, ArrowRight, Play, RotateCcw, Sparkles, Volume2 } from 'lucide-react'
 import PageHeader from '../../components/layout/PageHeader'
 import Card from '../../components/common/Card'
 import Button from '../../components/common/Button'
@@ -8,7 +8,12 @@ import SegmentedControl from '../../components/common/SegmentedControl'
 import ErrorMessage from '../../components/common/ErrorMessage'
 import Logo from '../../components/brand/Logo'
 import { useAccessibility } from '../../context/accessibilityContext.js'
-import { FONT_SIZES, HAND_OPTIONS, MOTION_OPTIONS } from '../../context/accessibilityOptions.js'
+import {
+  FONT_SIZES,
+  HAND_OPTIONS,
+  MOTION_OPTIONS,
+  RECOGNITION_SPEED_OPTIONS,
+} from '../../context/accessibilityOptions.js'
 import { useDevices } from '../../context/deviceContext.js'
 import { useSpeechSynthesis } from '../../hooks/useSpeechSynthesis.js'
 import { APP_STAGE, APP_VERSION } from '../../data/appInfo'
@@ -105,6 +110,34 @@ export default function Settings() {
             value={preferences.dominantHand}
             onChange={(value) => updatePreference('dominantHand', value)}
           />
+        </div>
+      </Card>
+
+      <Card as="section" aria-labelledby="ajustes-reconocimiento" padding="lg">
+        <h2 id="ajustes-reconocimiento" className="flex items-center gap-2 font-display text-lg font-extrabold text-brand-800">
+          <Sparkles className="size-5 text-brand-600" aria-hidden="true" />
+          Reconocimiento de señas
+        </h2>
+        <div className="mt-5 space-y-4">
+          <SegmentedControl
+            label="Velocidad de captación"
+            description="Tiempo que debes sostener firme la postura antes de que el motor valide y reproduzca la voz."
+            options={RECOGNITION_SPEED_OPTIONS}
+            value={preferences.recognitionSpeed || 'normal'}
+            onChange={(value) => updatePreference('recognitionSpeed', value)}
+          />
+
+          <ul className="space-y-1.5 rounded-md bg-brand-50 p-3 text-xs text-ink-soft">
+            <li>
+              • <strong className="text-ink">Rápido (0.9s):</strong> Mayor agilidad para usuarios con señas fluidas y consistentes.
+            </li>
+            <li>
+              • <strong className="text-ink">Normal (1.3s):</strong> Recomendado; exige 1.3 s de postura continua y 1.8 s de pausa para evitar cruces.
+            </li>
+            <li>
+              • <strong className="text-ink">Preciso (1.8s):</strong> Máxima estabilidad para demostraciones en vivo y evaluaciones académicas.
+            </li>
+          </ul>
         </div>
       </Card>
 

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import {
   ArrowRight,
   Bluetooth,
+  CheckCircle2,
   Copy,
   GraduationCap,
   History,
@@ -11,6 +12,7 @@ import {
   Play,
   Save,
   Siren,
+  SlidersHorizontal,
   Sparkles,
   Trash2,
   Volume2,
@@ -34,6 +36,11 @@ import { useHelpSignal } from '../../hooks/useHelpSignal.js'
 import { CONFIDENCE_THRESHOLD } from '../../services/gesture/knnClassifier.js'
 import { improveSentence } from '../../services/gesture/sentence.js'
 import { loadTraining } from '../../services/gesture/trainingStore.js'
+import {
+  getRecognitionSpeed,
+  RECOGNITION_SPEEDS,
+} from '../../services/gesture/recognitionConfig.js'
+import { cn } from '../../utils/cn'
 import {
   buildAlertMessage,
   isEmergencyChannelReady,
@@ -75,7 +82,7 @@ export default function Translation() {
   const [sosSign, setSosSign] = useState(null)
 
   // ── SOS por 3 repeticiones + Telegram ──
-  const { preferences } = useAccessibility()
+  const { preferences, updatePreference } = useAccessibility()
   const [link, setLink] = useState(loadLink)
   const [sosCount, setSosCount] = useState(0)
   const [sosPrompt, setSosPrompt] = useState(null)
@@ -83,6 +90,7 @@ export default function Translation() {
   const sosTimesRef = useRef([])
 
   const channelReady = isEmergencyChannelReady(link)
+  const currentSpeed = getRecognitionSpeed(preferences.recognitionSpeed)
 
   // La vinculación puede cambiar en otra pantalla o pestaña.
   useEffect(() => {
@@ -184,6 +192,9 @@ export default function Translation() {
     signs,
     enabled: listening,
     availableHands,
+    threshold: CONFIDENCE_THRESHOLD,
+    holdMs: currentSpeed.holdMs,
+    cooldownMs: currentSpeed.cooldownMs,
     onRecognize: handleRecognize,
   })
 
@@ -342,20 +353,122 @@ export default function Translation() {
           </span>
         </div>
 
+        {/* Selector de velocidad de captación */}
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand-100 bg-brand-50/60 p-3">
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal className="size-4 text-brand-600 shrink-0" aria-hidden="true" />
+            <div>
+              <p className="text-xs font-bold text-brand-800">Velocidad de captación</p>
+              <p className="text-[0.7rem] text-ink-soft">{currentSpeed.description}</p>
+            </div>
+          </div>
+          <div className="flex gap-1 rounded-full bg-white p-1 border border-brand-200">
+            {Object.values(RECOGNITION_SPEEDS).map((option) => {
+              const active = (preferences.recognitionSpeed || 'normal') === option.value
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => updatePreference('recognitionSpeed', option.value)}
+                  className={cn(
+                    'rounded-full px-3 py-1 text-xs font-bold transition-all',
+                    active
+                      ? 'bg-brand-600 text-white shadow-soft'
+                      : 'text-brand-700 hover:bg-brand-50',
+                  )}
+                >
+                  {option.label} ({(option.holdMs / 1000).toFixed(1)}s)
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
         {/* Señal en vivo: etiqueta, confianza y tiempo estabilizado */}
-        <div className="mt-5 rounded-md border border-brand-100 bg-white px-4 py-3">
+        <div className="mt-4 rounded-md border border-brand-100 bg-white px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
             <span className="font-semibold text-ink">
-              {live ? `Candidata: ${live.label}` : 'Sin seña estable'}
+              {live?.isAmbiguous
+                ? 'Gesto ambiguo'
+                : live?.label
+                  ? `Candidata: ${live.label}`
+                  : 'Sin seña estable'}
             </span>
             <span className="text-ink-soft">
               Confianza{' '}
               <strong className="font-semibold text-ink">
                 {live ? `${Math.round(live.confidence * 100)} %` : '—'}
               </strong>{' '}
-              · umbral {Math.round(CONFIDENCE_THRESHOLD * 100)} %
+              · umbral estricto {Math.round(CONFIDENCE_THRESHOLD * 100)} %
             </span>
           </div>
+
+          {/* Detección de ambigüedad entre señas cercanas */}
+          {live?.isAmbiguous && live.ambiguousLabels && (
+            <div className="mt-3 flex items-start gap-2.5 rounded-md bg-warning-soft px-3.5 py-2.5 text-xs text-warning border border-warning/30">
+              <span className="text-base leading-none">⚠️</span>
+              <div>
+                <p className="font-bold">Gesto ambiguo detectado</p>
+                <p className="mt-0.5 text-ink">
+                  Similitud muy cercana entre <strong>«{live.ambiguousLabels[0]}»</strong> y <strong>«{live.ambiguousLabels[1]}»</strong>.
+                  Ajusta la inclinación de la muñeca (pitch/roll) o define mejor la postura de los dedos para desempatar.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Cooldown activo tras una seña */}
+          {live?.inCooldown && (
+            <div className="mt-3 flex items-center gap-2 rounded-md bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-800 border border-brand-100">
+              <Pause className="size-4 text-brand-600 shrink-0" aria-hidden="true" />
+              <span>
+                Pausa de estabilidad ({live.cooldownRemaining}s)... Relaja la mano o cambia de postura antes de la siguiente seña.
+              </span>
+            </div>
+          )}
+
+          {/* Misma seña sostenida */}
+          {live?.heldSame && (
+            <div className="mt-3 flex items-center gap-2 rounded-md bg-brand-50 px-3 py-2 text-xs text-ink-soft border border-brand-100">
+              <span>
+                Seña <strong>«{live.label}»</strong> ya emitida. Para repetirla, suelta la postura de la mano o regresa a reposo.
+              </span>
+            </div>
+          )}
+
+          {/* Captando seña firme con barra de progreso */}
+          {live && live.progress > 0 && !live.stable && !live.inCooldown && !live.heldSame && !live.isAmbiguous && (
+            <div className="mt-3 rounded-md bg-brand-50/80 p-3 border border-brand-200">
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-2 font-bold text-brand-800">
+                  <span className="inline-block size-2.5 rounded-full bg-brand-600 animate-pulse" aria-hidden="true" />
+                  Captando seña: «{live.label}»
+                </span>
+                <span className="font-mono text-xs font-bold text-brand-700">
+                  {((live.progress) * (currentSpeed.holdMs / 1000)).toFixed(1)} / {(currentSpeed.holdMs / 1000).toFixed(1)} s
+                </span>
+              </div>
+              <ProgressBar
+                className="mt-2"
+                value={(live.progress ?? 0) * 100}
+                tone="brand"
+                size="sm"
+              />
+              <p className="mt-1.5 text-[0.7rem] text-ink-soft">
+                Mantén firme la mano {(currentSpeed.holdMs / 1000).toFixed(1)} segundos continuos para validar y reproducir la voz.
+              </p>
+            </div>
+          )}
+
+          {/* Seña validada */}
+          {live?.stable && (
+            <div className="mt-3 flex items-center gap-2 rounded-md bg-success-soft px-3 py-2 text-xs font-bold text-success border border-success/30">
+              <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
+              <span>¡Seña «{live.label}» validada y reproducida!</span>
+            </div>
+          )}
+
           {listening && sosCount > 0 && (
             <p className="mt-3 rounded-md bg-danger-soft px-3 py-2 text-xs font-semibold text-danger">
               Señas de emergencia: {sosCount} de {SOS_REPEATS} · al llegar a {SOS_REPEATS} se envía la
@@ -399,20 +512,13 @@ export default function Translation() {
             </p>
           )}
 
-          <ProgressBar
-            className="mt-2"
-            value={(live?.progress ?? 0) * 100}
-            label={live?.mode === 'dynamic' ? 'Confirmación del recorrido' : 'Estabilización'}
-            valueLabel={
-              live?.mode === 'dynamic'
-                ? live.stable
-                  ? 'Reconocida'
-                  : 'Confirmando'
-                : `${Math.round((live?.progress ?? 0) * 100)} % de 0,6 s`
-            }
-            tone={live?.stable ? 'success' : 'brand'}
-            size="sm"
-          />
+          {(!live || live.progress === 0) && !resting && (
+            <p className="mt-3 text-xs text-ink-soft">
+              {listening
+                ? 'Esperando postura firme… Adopta la seña y mantén la mano estable para iniciar captación.'
+                : 'Pulsa «Iniciar detección» para comenzar.'}
+            </p>
+          )}
         </div>
 
         <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
