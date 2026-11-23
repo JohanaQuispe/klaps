@@ -35,6 +35,12 @@ export const EMERGENCY_GESTURES = [
   { value: 'sin-gesto', label: 'Sin gesto configurado' },
 ]
 
+export const RECOGNITION_SPEED_OPTIONS = [
+  { value: 'rapido', label: 'Rápido (0.9s)' },
+  { value: 'normal', label: 'Normal (1.3s)' },
+  { value: 'preciso', label: 'Preciso (1.8s)' },
+]
+
 export const DEFAULT_PREFERENCES = {
   fontSize: 'normal',
   contrast: 'normal',
@@ -46,4 +52,5 @@ export const DEFAULT_PREFERENCES = {
   emergencyContact: { name: '', phone: '' },
   emergencyGesture: 'punio-doble',
   shareLocation: false,
+  recognitionSpeed: 'normal',
 }

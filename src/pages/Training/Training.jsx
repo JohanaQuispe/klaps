@@ -22,7 +22,7 @@ import SectionTitle from '../../components/common/SectionTitle'
 import ProgressBar from '../../components/common/ProgressBar'
 import SegmentedControl from '../../components/common/SegmentedControl'
 import { useDevices } from '../../context/deviceContext.js'
-import { useGestureRecognition } from '../../hooks/useGestureRecognition.js'
+import { HOLD_MS, useGestureRecognition } from '../../hooks/useGestureRecognition.js'
 import { isValidUuid } from '../../services/bluetooth/uuidSettings.js'
 import {
   CALIBRATION_FRAMES,
@@ -745,9 +745,9 @@ export default function Training() {
           Probar el reconocimiento
         </h2>
         <p className="mt-1 text-sm text-ink-soft">
-          Clasificación KNN con K = 3 y umbral {Math.round(CONFIDENCE_THRESHOLD * 100)} %. Las
-          estáticas exigen 0,6 s de estabilidad; las dinámicas se disparan al completar el recorrido,
-          sin esperar a que la mano se quede quieta. Las mismas reglas que usa la traducción.
+          Clasificación KNN con K = 3 y umbral estricto {Math.round(CONFIDENCE_THRESHOLD * 100)} %. Las
+          estáticas exigen {(HOLD_MS / 1000).toFixed(1).replace('.', ',')} s de estabilidad continua; las dinámicas se disparan al completar el recorrido,
+          sin esperar a que la mano se quede quieta. Detección de ambigüedad y separación de candidatos activa.
         </p>
 
         <div className="mt-4 flex flex-wrap items-center gap-3">

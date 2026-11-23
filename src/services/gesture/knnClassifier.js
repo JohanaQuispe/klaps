@@ -29,16 +29,33 @@ export const DYNAMIC_STEPS = 16
 export const DYNAMIC_FEATURE_SIZE = FEATURE_SIZE * DYNAMIC_STEPS
 
 /**
- * Ponderación por sensor dentro de un fotograma (solo señas dinámicas).
+ * Ponderación por sensor dentro de un fotograma.
  * Cada guante aporta: flex0..4, ax, ay, az, gx, gy, gz.
+ *
+ * En señas estáticas:
+ *   · flex 1,4 → evalúa cada dedo por separado con gran peso.
+ *   · aceleración 1,8 → inclinación de muñeca (pitch/roll/az), clave para
+ *     diferenciar señas con dedos similares pero distinta orientación (ej. Hola vs Bien).
+ *   · giroscopio 0,2 → peso mínimo para que el ruido de reposo no diluya la postura.
+ *
+ * En señas dinámicas:
  *   · flex 0,7 → la postura de los dedos no debe dominar una palabra con movimiento.
  *   · aceleración 2,5 → dirección e inclinación de la mano.
  *   · giroscopio 3,2 → el giro de la muñeca (Ñ, doble letra, cambios de sentido).
- * En las estáticas todos los pesos valen 1.
  */
+export const STATIC_FLEX_WEIGHT = 1.4
+export const STATIC_ACCEL_WEIGHT = 1.8
+export const STATIC_GYRO_WEIGHT = 0.2
+
 export const FLEX_WEIGHT = 0.7
 export const ACCEL_WEIGHT = 2.5
 export const GYRO_WEIGHT = 3.2
+
+const STATIC_ONE_HAND_WEIGHTS = [
+  STATIC_FLEX_WEIGHT, STATIC_FLEX_WEIGHT, STATIC_FLEX_WEIGHT, STATIC_FLEX_WEIGHT, STATIC_FLEX_WEIGHT,
+  STATIC_ACCEL_WEIGHT, STATIC_ACCEL_WEIGHT, STATIC_ACCEL_WEIGHT,
+  STATIC_GYRO_WEIGHT, STATIC_GYRO_WEIGHT, STATIC_GYRO_WEIGHT,
+]
 
 const ONE_HAND_WEIGHTS = [
   FLEX_WEIGHT, FLEX_WEIGHT, FLEX_WEIGHT, FLEX_WEIGHT, FLEX_WEIGHT,
@@ -47,22 +64,22 @@ const ONE_HAND_WEIGHTS = [
 ]
 
 const FRAME_WEIGHTS = {
-  static: Array.from({ length: FEATURE_SIZE }, () => 1),
+  static: [...STATIC_ONE_HAND_WEIGHTS, ...STATIC_ONE_HAND_WEIGHTS],
   dynamic: [...ONE_HAND_WEIGHTS, ...ONE_HAND_WEIGHTS],
 }
 
 export const K = 3
-/** Confianza mínima para dar por buena una seña. */
-export const CONFIDENCE_THRESHOLD = 0.75
+/** Confianza mínima estricta (≥ 85 %) para dar por buena una seña sin falsos positivos. */
+export const CONFIDENCE_THRESHOLD = 0.85
+
+/** Margen mínimo de separación relativo entre la seña ganadora y la segunda candidata. */
+export const MIN_SEPARATION_MARGIN = 0.25
 
 /**
  * Distancia (RMS por dimensión, sobre valores 0-100) a la que la similitud ya
- * es cero. Es el freno absoluto: sin él, con una sola muestra entrenada, el
- * reparto de votos daría 100 % aunque la postura no se pareciera en nada.
- * Las señas con movimiento varían más entre repeticiones, por eso su escala
- * es mayor. Si el reconocimiento resulta demasiado estricto, se suben.
+ * es cero. Escala ajustada a 45 para mayor rigor anatómico en señas estáticas.
  */
-export const STATIC_DISTANCE_SCALE = 50
+export const STATIC_DISTANCE_SCALE = 45
 export const DYNAMIC_DISTANCE_SCALE = 70
 
 /** Convierte distancia en similitud 0-1 (1 = idéntico). */
@@ -166,8 +183,14 @@ export function euclideanDistance(a, b) {
  * ponderando cada sensor (RMS ponderada: queda en la misma escala 0-100 que
  * la distancia normal, así los umbrales siguen valiendo).
  *
- * En señas dinámicas el IMU pesa ×2,5 (giroscopio ×3,2) y los flex ×0,7: dos
- * señas con los mismos dedos pero distinto movimiento (N vs Ñ) se separan.
+ * En señas estáticas:
+ *   · flex 1,4 por dedo: evalúa los 5 dedos individualmente.
+ *   · ax, ay, az 1,8: inclinación y orientación de muñeca (pitch y roll).
+ *   · penalización por discrepancia aislada: si un dedo flex o la inclinación
+ *     discrepa drásticamente (> 40 %), no se enmascara en el promedio global.
+ *
+ * En señas dinámicas:
+ *   · IMU pesa ×2,5 (giroscopio ×3,2) y los flex ×0,7.
  */
 export function handDistance(a, b, handMode = 'both', type = 'static') {
   const viewA = handView(a, handMode)
@@ -177,17 +200,34 @@ export function handDistance(a, b, handMode = 'both', type = 'static') {
   const weights = weightView(handMode, type)
   let sum = 0
   let total = 0
+  let maxSingleDiff = 0
+
   for (let index = 0; index < viewA.length; index += 1) {
     const weight = weights[index % weights.length]
-    const diff = viewA[index] - viewB[index]
+    const diff = Math.abs(viewA[index] - viewB[index])
     sum += weight * diff * diff
     total += weight
+
+    // En señas estáticas, verificar si algún sensor flex individual o eje de inclinación discrepa
+    const dim = index % HAND_SIZE
+    const isInactiveRing = dim === 3 && (viewA[index] === 0 || viewB[index] === 0)
+    if (!isInactiveRing && diff > maxSingleDiff) {
+      maxSingleDiff = diff
+    }
   }
 
-  return Math.sqrt(sum / Math.max(total, 1e-9))
+  const rms = Math.sqrt(sum / Math.max(total, 1e-9))
+
+  // Penalización si algún sensor flex activo o ángulo de inclinación discrepa fuertemente (> 40 %)
+  if (type === 'static' && maxSingleDiff > 40) {
+    const excess = maxSingleDiff - 40
+    return rms + excess * 0.35
+  }
+
+  return rms
 }
 
-/** Vecinos más cercanos y confianza ponderada por cercanía. */
+/** Vecinos más cercanos y confianza ponderada por cercanía y margen de separación. */
 function rank(vector, samples, k, scale, type = 'static') {
   if (!Array.isArray(vector) || vector.length === 0) return null
   if (!Array.isArray(samples) || samples.length === 0) return null
@@ -216,28 +256,38 @@ function rank(vector, samples, k, scale, type = 'static') {
   const byWeight = [...weights.entries()].sort((a, b) => b[1] - a[1])
   const bestLabel = byWeight[0][0]
   const bestWeight = byWeight[0][1]
-  const runnerUpWeight = byWeight[1]?.[1] ?? 0
+  const runnerUp = byWeight[1]
+  const runnerUpLabel = runnerUp ? runnerUp[0] : null
+  const runnerUpWeight = runnerUp ? runnerUp[1] : 0
 
   const votes = neighbors.filter((neighbor) => neighbor.label === bestLabel).length
   const winner = neighbors.find((neighbor) => neighbor.label === bestLabel)
-  /**
-   * Margen entre la etiqueta ganadora y la segunda: 1 = no hay rival cercano.
-   * Antes se multiplicaba por la unanimidad sobre K, pero con dos señas
-   * entrenadas nunca se pasaba del 50 % y el reconocimiento era imposible.
-   */
+
+  // Margen de reparto entre ganador y segundo candidato
   const labelMargin = bestWeight / (bestWeight + runnerUpWeight || 1)
+  const separation = runnerUpWeight > 0 ? (bestWeight - runnerUpWeight) / bestWeight : 1
+
+  // Si dos señas distintas compiten con puntuación similar, se marca como gesto ambiguo
+  const isAmbiguous = runnerUpWeight > 0 && separation < MIN_SEPARATION_MARGIN
+  const separationFactor = isAmbiguous
+    ? Math.max(0, separation / MIN_SEPARATION_MARGIN) * 0.4
+    : 1
+
   const proximity = similarityFromDistance(neighbors[0].distance, scale)
+  const confidence = labelMargin * proximity * separationFactor
 
   return {
     label: bestLabel,
-    // Margen entre etiquetas × cercanía real: "la menos mala" no basta.
-    confidence: labelMargin * proximity,
+    confidence,
     labelMargin,
+    separation,
     proximity,
     distance: neighbors[0].distance,
     handMode: winner?.handMode ?? 'both',
     neighbors,
     votes,
+    isAmbiguous,
+    ambiguousLabels: isAmbiguous && runnerUpLabel ? [bestLabel, runnerUpLabel] : null,
   }
 }
 
