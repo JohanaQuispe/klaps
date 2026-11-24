@@ -7,6 +7,8 @@ import {
   Copy,
   GraduationCap,
   History,
+  Layers,
+  Lock,
   MessageCircle,
   Pause,
   Play,
@@ -34,7 +36,12 @@ import { useClipboard } from '../../hooks/useClipboard.js'
 import { useGestureRecognition } from '../../hooks/useGestureRecognition.js'
 import { useHelpSignal } from '../../hooks/useHelpSignal.js'
 import { CONFIDENCE_THRESHOLD } from '../../services/gesture/knnClassifier.js'
-import { improveSentence } from '../../services/gesture/sentence.js'
+import {
+  buildQuickCalibration,
+  describeCalibration,
+  QUICK_CALIBRATION_STEPS,
+} from '../../services/bluetooth/calibration.js'
+import { improveSentence, synthesizeNaturalSentence } from '../../services/gesture/sentence.js'
 import { loadTraining } from '../../services/gesture/trainingStore.js'
 import {
   getRecognitionSpeed,
@@ -67,11 +74,26 @@ export const SOS_COUNTDOWN_SECONDS = 10
 /** Nombre con el que se anuncia la seña física de auxilio (agitar el guante). */
 export const HELP_SIGNAL_LABEL = 'Auxilio'
 
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
 export default function Translation() {
   const { entries, addEntry } = useHistory()
   const { supported: speechSupported, speak, speaking, stop: stopSpeech } = useAppSpeech()
   const { copied, error: copyError, copy } = useClipboard()
-  const { featureVector, readings, hasReadings, protocolConfigured, gloves } = useDevices()
+  const {
+    featureVector,
+    readings,
+    hasReadings,
+    protocolConfigured,
+    gloves,
+    calibration,
+    applyCalibrationSettings,
+  } = useDevices()
+
+  const readingsRef = useRef(readings)
+  useEffect(() => {
+    readingsRef.current = readings
+  }, [readings])
 
   const [training, setTraining] = useState(loadTraining)
   const [listening, setListening] = useState(false)
@@ -80,6 +102,33 @@ export default function Translation() {
   const [corrected, setCorrected] = useState(null)
   const [correctionNotes, setCorrectionNotes] = useState([])
   const [sosSign, setSosSign] = useState(null)
+
+  // ── Modo de traducción: Palabras y frases vs Deletreo (Vocales) ──
+  const [translationMode, setTranslationMode] = useState(() => {
+    if (typeof window === 'undefined') return 'words'
+    return window.localStorage.getItem('klaps.translation.mode') || 'words'
+  })
+
+  const handleSetTranslationMode = (mode) => {
+    setTranslationMode(mode)
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('klaps.translation.mode', mode)
+    }
+  }
+
+  // ── Síntesis y Redacción con IA tras pausa de 2.2 segundos ──
+  const [redactedText, setRedactedText] = useState('')
+  const [isAiRedacting, setIsAiRedacting] = useState(false)
+  const pendingWordsRef = useRef([])
+  const aiTimerRef = useRef(null)
+
+  // ── Asistente de auto-calibración rápida de 2 pasos ──
+  const [calibratingQuick, setCalibratingQuick] = useState(false)
+  const [quickModalOpen, setQuickModalOpen] = useState(false)
+  const [quickStep, setQuickStep] = useState(0)
+  const [quickProgress, setQuickProgress] = useState(0)
+  const [quickResult, setQuickResult] = useState(() => describeCalibration(calibration))
+  const [quickNotice, setQuickNotice] = useState('')
 
   // ── SOS por 3 repeticiones + Telegram ──
   const { preferences, updatePreference } = useAccessibility()
@@ -104,9 +153,18 @@ export default function Translation() {
   }, [])
 
   const signs = training.signs
+  const isVowelSign = (label) => /^[aeiouáéíóú]$/i.test(String(label).trim())
+
+  const activeSigns = useMemo(() => {
+    if (translationMode === 'words') {
+      return signs.filter((sign) => !isVowelSign(sign.label))
+    }
+    return signs
+  }, [signs, translationMode])
+
   const connected = gloves.filter((glove) => glove.status === 'conectado').length
   const text = words.join(' ')
-  const displayText = corrected ?? text
+  const displayText = redactedText || corrected || text
   const sessionEntries = entries.filter((entry) => entry.type === 'gesto').slice(0, 5)
 
   // El entrenamiento puede cambiar en otra pestaña o pantalla.
@@ -174,10 +232,34 @@ export default function Translation() {
         return
       }
 
+      // Acumula la palabra captada en el historial y en el búfer de IA
+      pendingWordsRef.current.push(label)
       setWords((previous) => [...previous, label])
-      speak(label)
+
+      // Reinicia temporizador de 2.2 segundos para redacción y síntesis con IA
+      if (aiTimerRef.current) {
+        clearTimeout(aiTimerRef.current)
+      }
+      setIsAiRedacting(true)
+
+      aiTimerRef.current = setTimeout(() => {
+        const wordsToSynthesize = [...pendingWordsRef.current]
+        if (wordsToSynthesize.length === 0) {
+          setIsAiRedacting(false)
+          return
+        }
+
+        const synthesized = synthesizeNaturalSentence(wordsToSynthesize)
+        setRedactedText(synthesized.text)
+        setIsAiRedacting(false)
+        pendingWordsRef.current = []
+
+        // Reproducir por TTS la frase fluida sintetizada
+        speak(synthesized.text)
+        addEntry({ type: 'gesto', text: synthesized.text, source: 'Guantes BLE (IA)' })
+      }, 2200)
     },
-    [registerEmergencyRepeat, speak],
+    [registerEmergencyRepeat, speak, addEntry],
   )
 
   // Si un guante no envía datos, sus señas no se evalúan (evita falsos positivos con ceros).
@@ -189,7 +271,8 @@ export default function Translation() {
   const { live, resting, restReason } = useGestureRecognition({
     vector: featureVector,
     readings,
-    signs,
+    signs: activeSigns,
+    calibration,
     enabled: listening,
     availableHands,
     threshold: CONFIDENCE_THRESHOLD,
@@ -254,14 +337,121 @@ export default function Translation() {
     return () => window.clearTimeout(timer)
   }, [sosPrompt, sendSos])
 
+  // ── SOS Compuesto: Puño cerrado + Agitación continua por 4.0 segundos ──
+  const [sosHoldTime, setSosHoldTime] = useState(0)
+
+  useEffect(() => {
+    if (!listening) {
+      return undefined
+    }
+
+    const interval = setInterval(() => {
+      const activeReading = readings.derecho || readings.izquierdo
+      if (!activeReading?.flex) {
+        setSosHoldTime(0)
+        return
+      }
+
+      const flex = activeReading.flex
+      // Canales activos flexionados fuertemente en puño cerrado
+      const validFlex = flex.filter((v) => Number.isFinite(v) && v > 5)
+      const isFistClosed =
+        validFlex.length >= 2
+          ? validFlex.every((v) => v >= 58)
+          : flex.slice(0, 4).every((v) => v >= 58)
+
+      // Agitación sostenida del MPU6050
+      const imu = activeReading.rawImu ?? activeReading.imu
+      const gyroMag = imu ? Math.hypot(imu.gx, imu.gy, imu.gz) : 0
+      const isShaking = helpSignal.level >= 0.28 || gyroMag > 1.6
+
+      if (isFistClosed && isShaking) {
+        setSosHoldTime((prev) => {
+          const next = prev + 100
+          if (next >= 4000) {
+            openSosPrompt()
+            return 0
+          }
+          return next
+        })
+      } else {
+        // Si abre la mano o detiene la agitación, se reinicia inmediatamente a 0
+        setSosHoldTime(0)
+      }
+    }, 100)
+
+    return () => {
+      clearInterval(interval)
+      setSosHoldTime(0)
+    }
+  }, [listening, readings, helpSignal.level, openSosPrompt])
+
+  const runQuickCalibration = async () => {
+    if (!hasReadings) {
+      setQuickNotice('Conecta los guantes y espera a recibir lecturas antes de iniciar.')
+      return
+    }
+
+    setCalibratingQuick(true)
+    setQuickResult(null)
+    setQuickNotice('')
+
+    const FRAMES_PER_STEP = 20
+    const snapshots = { stretched: [], closed: [] }
+
+    try {
+      // Paso 1: Mano abierta (2.0 segundos)
+      setQuickStep(0)
+      setQuickProgress(0)
+      for (let i = 0; i < FRAMES_PER_STEP; i += 1) {
+        snapshots.stretched.push({
+          derecho: readingsRef.current.derecho?.rawFlex ?? readingsRef.current.derecho?.flex ?? null,
+          izquierdo: readingsRef.current.izquierdo?.rawFlex ?? readingsRef.current.izquierdo?.flex ?? null,
+        })
+        setQuickProgress(i + 1)
+        await wait(100)
+      }
+
+      // Intervalo de transición para cambiar postura
+      setQuickNotice('¡Mano abierta capturada! Ahora cierra el puño firmemente...')
+      await wait(1000)
+
+      // Paso 2: Puño cerrado (2.0 segundos)
+      setQuickStep(1)
+      setQuickProgress(0)
+      for (let i = 0; i < FRAMES_PER_STEP; i += 1) {
+        snapshots.closed.push({
+          derecho: readingsRef.current.derecho?.rawFlex ?? readingsRef.current.derecho?.flex ?? null,
+          izquierdo: readingsRef.current.izquierdo?.rawFlex ?? readingsRef.current.izquierdo?.flex ?? null,
+        })
+        setQuickProgress(i + 1)
+        await wait(100)
+      }
+
+      const next = buildQuickCalibration(snapshots)
+      applyCalibrationSettings(next)
+      const desc = describeCalibration(next)
+      setQuickResult(desc)
+      setQuickNotice('¡Auto-calibración completada! Canales activos y pesos asignados.')
+    } finally {
+      setCalibratingQuick(false)
+    }
+  }
+
   const applyCorrection = () => {
-    const { text: improved, applied } = improveSentence(text)
+    const baseText = redactedText || text
+    const { text: improved, applied } = improveSentence(baseText)
     setCorrected(improved)
     setCorrectionNotes(applied)
+    speak(improved)
   }
 
   const clearText = () => {
+    if (aiTimerRef.current) clearTimeout(aiTimerRef.current)
+    pendingWordsRef.current = []
     setWords([])
+    setRedactedText('')
+    setIsAiRedacting(false)
     setCorrected(null)
     setCorrectionNotes([])
     setLastMatch(null)
@@ -287,7 +477,22 @@ export default function Translation() {
         eyebrow="Traducción"
         title="Traducción de gestos"
         description="Tus guantes leen la postura de las dos manos y KLAPS la convierte en texto y voz en tiempo real."
-        actions={<StatusBadge status={status.status} label={status.label} />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge status={status.status} label={status.label} />
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={SlidersHorizontal}
+              onClick={() => {
+                setQuickModalOpen(true)
+                setQuickResult(describeCalibration(calibration))
+              }}
+            >
+              Auto-calibrar (2 pasos)
+            </Button>
+          </div>
+        }
       />
 
       {!protocolConfigured && (
@@ -316,6 +521,47 @@ export default function Translation() {
       )}
 
       <Card padding="lg">
+        {/* Selector de modo: Palabras y frases vs Deletreo */}
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand-200 bg-brand-50/80 p-3">
+          <div className="flex items-center gap-2">
+            <Layers className="size-4 text-brand-600 shrink-0" aria-hidden="true" />
+            <div>
+              <p className="text-xs font-bold text-brand-900">Modo de traducción</p>
+              <p className="text-[0.7rem] text-ink-soft">
+                {translationMode === 'words'
+                  ? 'Modo Palabras: vocales A E I O U descartadas para evitar falsos positivos con palabras completas.'
+                  : 'Modo Deletreo: evalúa tanto vocales como palabras.'}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-1.5 rounded-md bg-white p-1 border border-brand-200">
+            <button
+              type="button"
+              onClick={() => handleSetTranslationMode('words')}
+              className={cn(
+                'rounded px-3 py-1.5 text-xs font-bold transition-all',
+                translationMode === 'words'
+                  ? 'bg-brand-600 text-white shadow-soft'
+                  : 'text-brand-800 hover:bg-brand-50',
+              )}
+            >
+              💬 Modo Palabras y Frases
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSetTranslationMode('spelling')}
+              className={cn(
+                'rounded px-3 py-1.5 text-xs font-bold transition-all',
+                translationMode === 'spelling'
+                  ? 'bg-brand-600 text-white shadow-soft'
+                  : 'text-brand-800 hover:bg-brand-50',
+              )}
+            >
+              🔤 Modo Deletreo (Vocales)
+            </button>
+          </div>
+        </div>
+
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs font-semibold tracking-[0.14em] text-brand-600 uppercase">
             Texto reconocido
@@ -329,16 +575,47 @@ export default function Translation() {
           </span>
         </div>
 
-        <p
-          aria-live="polite"
-          className="mt-4 min-h-32 rounded-md bg-brand-50 px-4 py-5 font-display text-2xl leading-snug font-extrabold text-brand-800 sm:min-h-36 sm:px-6 sm:text-3xl"
-        >
-          {displayText || (
-            <span className="font-sans text-base font-normal text-ink-soft sm:text-lg">
-              Aquí aparecerán las palabras que reconozcan tus guantes.
+        {/* Área de texto traducido / redactado con IA */}
+        <div className="mt-4 rounded-md bg-brand-50 px-4 py-5 sm:px-6">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-xs font-bold text-brand-700 uppercase tracking-wide flex items-center gap-1.5">
+              <Sparkles className="size-3.5 text-brand-600" aria-hidden="true" />
+              {redactedText ? 'Frase sintetizada (Español fluido)' : 'Traducción en tiempo real'}
             </span>
+            {isAiRedacting && (
+              <span className="inline-flex items-center gap-1 text-[0.7rem] font-semibold text-brand-600 animate-pulse bg-brand-100/80 px-2.5 py-0.5 rounded-full">
+                <span className="size-1.5 rounded-full bg-brand-600" />
+                Redactando con IA tras pausa (2.2s)...
+              </span>
+            )}
+          </div>
+
+          <p
+            aria-live="polite"
+            className="font-display text-2xl leading-snug font-extrabold text-brand-900 sm:text-3xl"
+          >
+            {displayText || (
+              <span className="font-sans text-base font-normal text-ink-soft sm:text-lg">
+                Aquí aparecerán las palabras que reconozcan tus guantes.
+              </span>
+            )}
+          </p>
+
+          {/* Chips de palabras reconocidas */}
+          {words.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-brand-200/60 flex flex-wrap items-center gap-1.5">
+              <span className="text-[0.7rem] font-medium text-ink-soft mr-1">Señas captadas:</span>
+              {words.map((w, idx) => (
+                <span
+                  key={`${w}-${idx}`}
+                  className="inline-flex items-center rounded-md bg-white px-2 py-0.5 text-xs font-semibold text-brand-800 border border-brand-200 shadow-xs"
+                >
+                  {w}
+                </span>
+              ))}
+            </div>
           )}
-        </p>
+        </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-ink-soft">
           <span className="inline-flex items-center gap-1.5">
@@ -428,6 +705,16 @@ export default function Translation() {
             </div>
           )}
 
+          {/* Bloqueo estricto anti-repetición Latch & Release */}
+          {live?.latched && (
+            <div className="mt-3 flex items-center gap-2 rounded-md bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-800 border border-brand-200">
+              <Lock className="size-4 text-brand-600 shrink-0" aria-hidden="true" />
+              <span>
+                Postura bloqueada para <strong>«{live.latchedLabel}»</strong>. Suelta la mano o cambia de postura para desbloquear la siguiente palabra.
+              </span>
+            </div>
+          )}
+
           {/* Misma seña sostenida */}
           {live?.heldSame && (
             <div className="mt-3 flex items-center gap-2 rounded-md bg-brand-50 px-3 py-2 text-xs text-ink-soft border border-brand-100">
@@ -495,6 +782,25 @@ export default function Translation() {
                 tone={helpSignal.level >= 0.4 ? 'danger' : 'brand'}
                 size="sm"
               />
+            </div>
+          )}
+
+          {/* SOS Compuesto: Puño cerrado + Agitación continua sostenida durante 4.0 segundos */}
+          {listening && sosHoldTime > 0 && (
+            <div className="mt-3 rounded-md bg-danger-soft p-3 border border-danger/40 animate-pulse">
+              <div className="flex items-center justify-between text-xs font-bold text-danger">
+                <span>🚨 ALERTA SOS: Puño cerrado + Agitación en curso</span>
+                <span>{(sosHoldTime / 1000).toFixed(1)} / 4.0 s</span>
+              </div>
+              <ProgressBar
+                className="mt-2"
+                value={(sosHoldTime / 4000) * 100}
+                tone="danger"
+                size="sm"
+              />
+              <p className="mt-1 text-[0.7rem] text-danger">
+                Mantén el puño cerrado agitando 4 segundos continuos. Si abres la mano, se cancela y reinicia a 0 de inmediato.
+              </p>
             </div>
           )}
 
@@ -750,6 +1056,85 @@ export default function Translation() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Modal del Asistente de Calibración Rápida de 2 pasos */}
+      <Modal
+        open={quickModalOpen}
+        onClose={() => setQuickModalOpen(false)}
+        title="Asistente de auto-calibración rápida (2 pasos)"
+        description="Detecta los canales flex activos y anula canales dañados o sin respuesta asignando peso 0, apoyándose en el giroscopio MPU6050."
+        footer={
+          <div className="flex w-full justify-end gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => setQuickModalOpen(false)}
+              disabled={calibratingQuick}
+            >
+              Cerrar
+            </Button>
+            <Button
+              onClick={runQuickCalibration}
+              disabled={calibratingQuick || !hasReadings}
+            >
+              {calibratingQuick ? 'Calibrando…' : 'Iniciar calibración (4 seg)'}
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-brand-200 bg-brand-50 p-3.5">
+            <div className="flex items-center justify-between text-xs font-bold text-brand-900 mb-1">
+              <span>Paso {quickStep + 1} de 2: {QUICK_CALIBRATION_STEPS[quickStep]?.label}</span>
+              <span>{(quickProgress / 10).toFixed(1)} / 2.0 s</span>
+            </div>
+            <p className="text-xs text-ink-soft">
+              {QUICK_CALIBRATION_STEPS[quickStep]?.instruction}
+            </p>
+
+            {calibratingQuick && (
+              <ProgressBar
+                className="mt-2"
+                value={(quickProgress / 20) * 100}
+                tone="brand"
+                size="sm"
+              />
+            )}
+
+            {quickNotice && (
+              <p className="mt-2 text-xs font-semibold text-brand-800">{quickNotice}</p>
+            )}
+          </div>
+
+          {quickResult && (
+            <div className="rounded-md border border-brand-200 bg-white p-3">
+              <p className="text-xs font-bold text-brand-900">{quickResult.summary}</p>
+              <p className="text-[0.72rem] text-ink-soft mt-0.5">
+                {quickResult.activeFlexCount} activos (peso 1.4) · {quickResult.deadFlexCount} inactivos / muertos (peso 0.0)
+              </p>
+
+              <div className="mt-2.5 space-y-1 text-xs">
+                {quickResult.fingerChannels?.map((ch) => (
+                  <div
+                    key={ch.finger}
+                    className="flex items-center justify-between rounded bg-brand-50/60 px-2 py-1"
+                  >
+                    <span className="font-semibold text-ink">{ch.name}:</span>
+                    <span className={ch.isActive ? 'font-bold text-success' : 'font-bold text-warning'}>
+                      {ch.statusText}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!hasReadings && (
+            <p className="text-xs text-warning font-semibold">
+              ⚠️ Conecta tus guantes BLE y espera a recibir tramas para iniciar la calibración.
+            </p>
+          )}
+        </div>
       </Modal>
 
       <section aria-labelledby="sesion-titulo" className="mt-6">

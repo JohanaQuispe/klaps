@@ -26,12 +26,39 @@
 
 export const CALIBRATION_KEY = 'klaps.calibration.v1'
 
-/** Fotogramas por paso: 2 segundos a 20 Hz. */
+/** Fotogramas por paso: 2 segundos a 20 Hz (40 muestras). */
 export const CALIBRATION_FRAMES = 40
 /** Pausa antes de cada paso para que la persona se coloque. */
 export const CALIBRATION_SETTLE_MS = 900
-/** Diferencia mínima entre mínimo y máximo para dar un dedo por válido. */
-export const MIN_FLEX_SPAN = 5
+/**
+ * Diferencia mínima estricta entre mínimo y máximo para dar un dedo por activo (12 %).
+ * Sensores con menor variación se consideran muertos/saturados y se les asigna peso 0.
+ */
+export const MIN_FLEX_SPAN = 12
+
+export const FINGER_NAMES = [
+  'Pulgar (GPIO 36)',
+  'Índice (GPIO 39)',
+  'Medio (GPIO 34)',
+  'Anular (GPIO 35)',
+  'Meñique (GPIO 32)',
+]
+
+/** Asistente rápido de 2 pasos para compensación de hardware en tiempo real */
+export const QUICK_CALIBRATION_STEPS = [
+  {
+    key: 'stretched',
+    title: 'Paso 1: Mano abierta (2s)',
+    instruction: 'Extiende todos los dedos al máximo con la palma hacia abajo. Se registrará la línea base mínima (0 %).',
+    icon: 'open',
+  },
+  {
+    key: 'closed',
+    title: 'Paso 2: Puño cerrado (2s)',
+    instruction: 'Cierra el puño con firmeza con todos los dedos apretados. Se registrará el tope máximo (100 %).',
+    icon: 'fist',
+  },
+]
 
 export const CALIBRATION_STEPS = [
   {
@@ -152,8 +179,12 @@ function averageImu(readings = []) {
 
 /** Diez valores de flex por instantánea: 5 del guante derecho y 5 del izquierdo. */
 function flexSnapshot(snapshot) {
-  const right = snapshot?.derecho?.flex ?? []
-  const left = snapshot?.izquierdo?.flex ?? []
+  const right = Array.isArray(snapshot?.derecho)
+    ? snapshot.derecho
+    : snapshot?.derecho?.rawFlex ?? snapshot?.derecho?.flex ?? []
+  const left = Array.isArray(snapshot?.izquierdo)
+    ? snapshot.izquierdo
+    : snapshot?.izquierdo?.rawFlex ?? snapshot?.izquierdo?.flex ?? []
   return [...Array.from({ length: 5 }, (_, index) => right[index]), ...Array.from({ length: 5 }, (_, index) => left[index])]
 }
 
@@ -203,28 +234,65 @@ export function buildCalibration({ stretched = [], closed = [], neutral = [] } =
   }
 }
 
-/** Resumen legible para la interfaz. */
+/**
+ * Asistente rápido de 2 pasos: mano abierta + puño cerrado.
+ * Usa la muestra de mano abierta como línea base neutral para el IMU.
+ */
+export function buildQuickCalibration({ stretched = [], closed = [] } = {}) {
+  return buildCalibration({ stretched, closed, neutral: stretched })
+}
+
+/** Resumen legible para la interfaz con detalle de canales activos y pesos asignados. */
 export function describeCalibration(calibration) {
   if (!isCalibrationUsable(calibration)) return null
 
-  const ranges = (offset) =>
+  const ranges = (offset, handLabel = '') =>
     Array.from({ length: 5 }, (_, index) => {
       const position = offset + index
+      const low = Math.round(calibration.flex.min[position])
+      const high = Math.round(calibration.flex.max[position])
+      const span = high - low
+      const valid = Boolean(calibration.flex.valid[position])
+
+      let status = 'activo'
+      if (!valid) {
+        status = span <= 2 ? 'desconectado / 0V' : 'rango insuficiente (< 12 %)'
+      }
+
+      const fingerName = FINGER_NAMES[index] || `Dedo ${index}`
       return {
-        finger: index,
-        valid: calibration.flex.valid[position],
-        min: Math.round(calibration.flex.min[position]),
-        max: Math.round(calibration.flex.max[position]),
+        finger: `${handLabel ? `${handLabel}-` : ''}${fingerName.toLowerCase()}`,
+        name: handLabel ? `${fingerName} (${handLabel})` : fingerName,
+        valid,
+        isActive: valid,
+        min: low,
+        max: high,
+        span,
+        status,
+        statusText: valid
+          ? `Rango ${low}% - ${high}% (activo · peso 1.4)`
+          : `${low}% - ${high}% (inactivo · peso 0)`,
+        weight: valid ? 1.4 : 0,
       }
     })
 
+  const derechoRanges = ranges(0, '')
+  const izquierdoRanges = ranges(5, 'izq')
   const validCount = calibration.flex.valid.filter(Boolean).length
 
   return {
     createdAt: calibration.createdAt,
     validCount,
-    derecho: ranges(0),
-    izquierdo: ranges(5),
+    activeFlexCount: validCount,
+    deadFlexCount: 10 - validCount,
+    ready: true,
+    summary:
+      validCount > 0
+        ? `${validCount} sensores flex activos (peso 1.4) · canales muertos anulados (peso 0)`
+        : 'Calibración activa basada en MPU6050 (pitch/roll)',
+    derecho: derechoRanges,
+    izquierdo: izquierdoRanges,
+    fingerChannels: derechoRanges,
     imu: calibration.imu,
   }
 }

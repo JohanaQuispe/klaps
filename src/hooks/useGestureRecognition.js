@@ -2,9 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import {
   CONFIDENCE_THRESHOLD,
   K,
+  STATIC_DISTANCE_SCALE,
   classify,
   classifyTrajectory,
   flattenSamples,
+  handDistance,
+  similarityFromDistance,
 } from '../services/gesture/knnClassifier.js'
 import { isRestPose } from '../services/bluetooth/sensorFrame.js'
 import { trajectoryFromFrames } from '../services/gesture/trajectory.js'
@@ -12,10 +15,10 @@ import { trajectoryFromFrames } from '../services/gesture/trajectory.js'
 /** Bucle de clasificación: 20 Hz, igual que la frecuencia de la trama. */
 export const LOOP_MS = 50
 /**
- * Seña estática: debe mantenerse firme durante este tiempo (~1.3 s)
+ * Seña estática: debe mantenerse firme durante 1.5 s continuos
  * antes de darla por buena, evitando disparos accidentales en posturas intermedias.
  */
-export const HOLD_MS = 1300
+export const HOLD_MS = 1500
 /**
  * Seña dinámica: basta con que la trayectoria supere el umbral durante
  * dos ciclos (100 ms). No se exige quedarse quieto al terminar el gesto.
@@ -56,23 +59,23 @@ const liveState = (result, progress, stable, mode, extra = {}) => ({
 })
 
 /**
- * Reconocimiento en tiempo real con dos caminos y alta estabilidad:
+ * Reconocimiento en tiempo real con compensación de hardware y Latch & Release estricto:
  *
- * · Estáticas: cada 50 ms clasifica el fotograma y exige que la misma etiqueta
- *   se mantenga `holdMs` (por defecto 1.3 s) continua por encima del umbral (≥ 85 %),
- *   sin ambigüedad con segundas candidatas (ej. Hola vs Bien).
+ * · Auto-detección de canales activos:
+ *   Los canales flex muertos o con poco rango (< 12 %) reciben peso 0 en el cálculo.
  *
- * · Dinámicas: mantiene una ventana deslizante de 4 s (80 fotogramas),
- *   recorta el silencio de los extremos, la resume en 16 pasos clave y la
- *   compara con las trayectorias grabadas.
- *
- * Ambas aplican un periodo de enfriamiento (`cooldownMs`, por defecto 1.8 s)
- * y exigen relajar la postura o retornar a reposo antes de poder repetir la misma palabra.
+ * · Bloqueo estricto anti-repetición (Latch & Release):
+ *   Al emitir una seña, queda bloqueada y no vuelve a evaluarse ninguna seña
+ *   hasta que:
+ *     1) La similitud con la postura previa caiga de 65 %, O
+ *     2) El MPU6050 detecte movimiento de transición durante ≥ 0.6 s, O
+ *     3) La mano pase a reposo físico.
  */
 export function useGestureRecognition({
   vector,
   readings,
   signs,
+  calibration,
   enabled = false,
   onRecognize,
   threshold = CONFIDENCE_THRESHOLD,
@@ -87,11 +90,15 @@ export function useGestureRecognition({
   const onRecognizeRef = useRef(onRecognize)
   const handsRef = useRef(availableHands)
   const readingsRef = useRef(readings)
+  const calibrationRef = useRef(calibration)
   const staticCandidateRef = useRef(null)
   const dynamicCandidateRef = useRef(null)
   const bufferRef = useRef([])
   const cooldownUntilRef = useRef(0)
-  const lastEmittedLabelRef = useRef(null)
+
+  // Bloqueo Latch & Release
+  const latchedRef = useRef(null)
+  const motionDurationRef = useRef(0)
 
   const [live, setLive] = useState(null)
   const [emitted, setEmitted] = useState(null)
@@ -115,6 +122,10 @@ export function useGestureRecognition({
   }, [readings])
 
   useEffect(() => {
+    calibrationRef.current = calibration
+  }, [calibration])
+
+  useEffect(() => {
     samplesRef.current = flattenSamples(signs)
   }, [signs])
 
@@ -123,7 +134,8 @@ export function useGestureRecognition({
     dynamicCandidateRef.current = null
     bufferRef.current = []
     cooldownUntilRef.current = 0
-    lastEmittedLabelRef.current = null
+    latchedRef.current = null
+    motionDurationRef.current = 0
     if (!enabled) return undefined
 
     const timer = window.setInterval(() => {
@@ -133,13 +145,16 @@ export function useGestureRecognition({
         hasRequiredHands(sample.handMode, hands),
       )
 
+      // Máscara de canales flex activos para asignarles peso 0 a los muertos/saturados
+      const activeMask = calibrationRef.current?.flex?.valid ?? null
+
       // ── 0. Reposo: puños cerrados hacia abajo ─────────────────────────
-      // Al entrar en reposo, se reinicia la memoria y se permite repetir señas previas.
       const enterRest = (reason) => {
         staticCandidateRef.current = null
         dynamicCandidateRef.current = null
         bufferRef.current = []
-        lastEmittedLabelRef.current = null
+        latchedRef.current = null
+        motionDurationRef.current = 0
         setLive(null)
         setRestReason(reason)
       }
@@ -157,10 +172,57 @@ export function useGestureRecognition({
         return
       }
 
-      // Las manos se movieron: se sale del reposo y se vuelve a traducir.
+      // Las manos se movieron: se sale del reposo
       setRestReason('')
 
       const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
+
+      // ── Control de Latch & Release ────────────────────────────────────
+      if (latchedRef.current) {
+        const latchedVector = latchedRef.current.vector
+        const latchedDist = handDistance(current, latchedVector, 'both', 'static', activeMask)
+        const latchedSim = similarityFromDistance(latchedDist, STATIC_DISTANCE_SCALE)
+
+        // Detección de movimiento de transición por MPU6050
+        const imuD = readingsRef.current?.derecho?.rawImu ?? readingsRef.current?.derecho?.imu
+        const imuI = readingsRef.current?.izquierdo?.rawImu ?? readingsRef.current?.izquierdo?.imu
+        const gyroD = imuD ? Math.hypot(imuD.gx, imuD.gy, imuD.gz) : 0
+        const gyroI = imuI ? Math.hypot(imuI.gx, imuI.gy, imuI.gz) : 0
+        const maxGyro = Math.max(gyroD, gyroI)
+
+        if (maxGyro > 1.2) {
+          motionDurationRef.current += LOOP_MS
+        } else {
+          motionDurationRef.current = Math.max(0, motionDurationRef.current - LOOP_MS * 0.5)
+        }
+
+        // Criterios de liberación obligatorios:
+        // 1) Similitud cae de 65 % (cambió de postura)
+        // 2) Movimiento sostenido de transición durante ≥ 0.6 s
+        // 3) Paso a reposo físico
+        const released = latchedSim < 0.65 || motionDurationRef.current >= 600
+
+        if (released) {
+          latchedRef.current = null
+          motionDurationRef.current = 0
+        } else {
+          // Permanece bloqueado para evitar repeticiones en bucle
+          staticCandidateRef.current = null
+          setLive({
+            label: latchedRef.current.label,
+            confidence: 1,
+            distance: latchedDist,
+            handMode: 'both',
+            mode: 'static',
+            progress: 1,
+            stable: false,
+            latched: true,
+            latchedLabel: latchedRef.current.label,
+          })
+          return
+        }
+      }
+
       const inCooldown = now < cooldownUntilRef.current
       const cooldownRemaining = inCooldown
         ? Math.max(0.1, Number(((cooldownUntilRef.current - now) / 1000).toFixed(1)))
@@ -178,7 +240,9 @@ export function useGestureRecognition({
         if (buffer.length > windowFrames) buffer.splice(0, buffer.length - windowFrames)
 
         const trajectory = trajectoryFromFrames(buffer)
-        const dynamicResult = trajectory ? classifyTrajectory(trajectory, dynamicSamples, K) : null
+        const dynamicResult = trajectory
+          ? classifyTrajectory(trajectory, dynamicSamples, K, 70, activeMask)
+          : null
         const withinThreshold =
           dynamicResult &&
           dynamicResult.confidence >= threshold &&
@@ -208,7 +272,7 @@ export function useGestureRecognition({
 
             if (ready) {
               cooldownUntilRef.current = now + cooldownMs
-              lastEmittedLabelRef.current = dynamicResult.label
+              latchedRef.current = { label: dynamicResult.label, vector: [...current], at: now }
               dynamicCandidateRef.current = null
               staticCandidateRef.current = null
               bufferRef.current = []
@@ -221,7 +285,6 @@ export function useGestureRecognition({
         }
       }
 
-      // La trayectoria tiene prioridad: no se mezcla con la clasificación estática.
       if (handledByDynamic) return
 
       // ── 2. Fotograma (señas estáticas) ──────────────────────────────────
@@ -230,9 +293,9 @@ export function useGestureRecognition({
         return
       }
 
-      const result = classify(current, staticSamples, K)
+      const result = classify(current, staticSamples, K, STATIC_DISTANCE_SCALE, activeMask)
 
-      // Seña «0» aprendida: pausa en lugar de palabra.
+      // Seña «0» aprendida: pausa en lugar de palabra
       if (
         result &&
         REST_SIGN_LABELS.test(String(result.label).trim()) &&
@@ -242,15 +305,9 @@ export function useGestureRecognition({
         return
       }
 
-      // Descartar gestos ambiguos o por debajo del umbral estricto
+      // Descartar gestos ambiguos o por debajo del umbral estricto (≥ 85 %)
       if (!result || result.confidence < threshold || result.isAmbiguous) {
         staticCandidateRef.current = null
-
-        // Si la postura se desarmó claramente, liberar la última seña emitida
-        if (!result || result.confidence < threshold * 0.6) {
-          lastEmittedLabelRef.current = null
-        }
-
         setLive(
           result
             ? liveState(result, 0, false, 'static', { inCooldown, cooldownRemaining })
@@ -259,20 +316,7 @@ export function useGestureRecognition({
         return
       }
 
-      // Si la seña es la misma que se acaba de emitir, exigir relajar la postura antes de repetir
-      if (result.label === lastEmittedLabelRef.current) {
-        staticCandidateRef.current = null
-        setLive(
-          liveState(result, 1, false, 'static', {
-            heldSame: true,
-            inCooldown,
-            cooldownRemaining,
-          }),
-        )
-        return
-      }
-
-      // Si estamos en ventana de cooldown tras otra seña, no acumular hold time
+      // Enfriamiento entre señas
       if (inCooldown) {
         staticCandidateRef.current = null
         setLive(
@@ -284,7 +328,7 @@ export function useGestureRecognition({
         return
       }
 
-      // Acumular tiempo de estabilización (Hold Time de ~1.3 s)
+      // Acumular tiempo de estabilización (Hold Time)
       const candidate = staticCandidateRef.current
       if (!candidate || candidate.label !== result.label) {
         staticCandidateRef.current = { label: result.label, since: now }
@@ -301,8 +345,11 @@ export function useGestureRecognition({
 
       if (readyToEmit) {
         cooldownUntilRef.current = now + cooldownMs
-        lastEmittedLabelRef.current = result.label
+        // Bloquear inmediatamente para obligar a soltar la postura
+        latchedRef.current = { label: result.label, vector: [...current], at: now }
+        motionDurationRef.current = 0
         staticCandidateRef.current = null
+
         const payload = { ...result, mode: 'static' }
         setEmitted({ ...payload, at: Date.now() })
         onRecognizeRef.current?.(payload)
@@ -314,11 +361,11 @@ export function useGestureRecognition({
       staticCandidateRef.current = null
       dynamicCandidateRef.current = null
       bufferRef.current = []
-      lastEmittedLabelRef.current = null
+      latchedRef.current = null
+      motionDurationRef.current = 0
     }
   }, [enabled, threshold, holdMs, dynamicConfirmMs, cooldownMs, windowFrames])
 
-  // Al detener, la interfaz no debe seguir mostrando la última candidata.
   return {
     live: enabled ? live : null,
     emitted,
