@@ -14,10 +14,10 @@ export const RECOGNITION_SPEEDS = {
   normal: {
     value: 'normal',
     label: 'Normal',
-    fullLabel: 'Normal (1.5s)',
-    holdMs: 1500,
+    fullLabel: 'Normal (1.4s)',
+    holdMs: 1400,
     cooldownMs: 1800,
-    description: 'Captación en 1.5 s (Recomendado) · Evita posturas intermedias y estabiliza.',
+    description: 'Captación en 1.4 s (Recomendado) · Evita posturas intermedias y estabiliza.',
   },
   preciso: {
     value: 'preciso',

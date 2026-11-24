@@ -145,11 +145,15 @@ export function handView(vector, handMode = 'both') {
 }
 
 /**
- * Pesos de un paso clave según la mano, el tipo de seña y la máscara de canales activos.
+ * Pesos de un paso clave según la mano, el tipo de seña, la máscara de canales activos y el modo.
  * Si un canal flex está marcado como inactivo o con rango insuficiente en la calibración,
  * se le asigna peso 0 para compensar el hardware por software.
+ *
+ * Si `flexOnly` es true (Modo Palabras):
+ * Se anula el peso de los 6 ejes del MPU6050 (ax, ay, az, gx, gy, gz = peso 0),
+ * evaluando al 100% únicamente los 4 dedos activos calibrados (pulgar, índice, medio, meñique).
  */
-export function weightView(handMode = 'both', type = 'static', activeMask = null) {
+export function weightView(handMode = 'both', type = 'static', activeMask = null, flexOnly = false) {
   const mode = normalizeHandMode(handMode)
   const kind = normalizeGestureType(type)
   const perStep = [...FRAME_WEIGHTS[kind]]
@@ -167,6 +171,18 @@ export function weightView(handMode = 'both', type = 'static', activeMask = null
       if (activeMask[5 + i] === false) {
         perStep[11 + i] = 0
       }
+    }
+  }
+
+  // 100% Flex en Modo Palabras: MPU6050 reservado exclusivamente para el gatillo SOS
+  if (flexOnly) {
+    // Guante derecho IMU: dimensiones 5..10 en el fotograma de 22
+    for (let i = 5; i <= 10; i++) {
+      perStep[i] = 0
+    }
+    // Guante izquierdo IMU: dimensiones 16..21 en el fotograma de 22
+    for (let i = 16; i <= 21; i++) {
+      perStep[i] = 0
     }
   }
 
@@ -196,26 +212,29 @@ export function euclideanDistance(a, b) {
  *
  * En señas estáticas:
  *   · flex 1,4 por dedo activo: evalúa dedos individuales. Canales muertos reciben peso 0.
- *   · ax, ay, az 1,8: inclinación y orientación de muñeca (pitch y roll).
- *   · penalización por discrepancia aislada: si un sensor activo discrepa (> 40 %),
- *     no se enmascara en el promedio global.
- *
- * En señas dinámicas:
- *   · IMU pesa ×2,5 (giroscopio ×3,2) y los flex ×0,7.
+ *   · si flexOnly es true: 100% flex sobre los 4 dedos activos (MPU6050 peso 0).
+ *   · si flexOnly es false: ax, ay, az 1,8 para inclinación de muñeca.
  */
-export function handDistance(a, b, handMode = 'both', type = 'static', activeMask = null) {
+export function handDistance(
+  a,
+  b,
+  handMode = 'both',
+  type = 'static',
+  activeMask = null,
+  flexOnly = false,
+) {
   const viewA = handView(a, handMode)
   const viewB = handView(b, handMode)
   if (viewA.length === 0 || viewB.length === 0) return Infinity
 
-  const weights = weightView(handMode, type, activeMask)
+  const weights = weightView(handMode, type, activeMask, flexOnly)
   let sum = 0
   let total = 0
   let maxSingleDiff = 0
 
   for (let index = 0; index < viewA.length; index += 1) {
     const weight = weights[index % weights.length]
-    // Ignorar por completo canales inactivos / muertos (peso 0)
+    // Ignorar por completo canales inactivos / muertos o ejes MPU6050 en flexOnly (peso 0)
     if (weight <= 0) continue
 
     const diff = Math.abs(viewA[index] - viewB[index])
@@ -230,9 +249,9 @@ export function handDistance(a, b, handMode = 'both', type = 'static', activeMas
 
   const rms = Math.sqrt(sum / Math.max(total, 1e-9))
 
-  // Penalización si algún sensor activo o ángulo de inclinación discrepa fuertemente (> 40 %)
-  if (type === 'static' && maxSingleDiff > 40) {
-    const excess = maxSingleDiff - 40
+  // Penalización si algún sensor activo discrepa fuertemente (> 35 %)
+  if (type === 'static' && maxSingleDiff > 35) {
+    const excess = maxSingleDiff - 35
     return rms + excess * 0.35
   }
 
@@ -240,7 +259,7 @@ export function handDistance(a, b, handMode = 'both', type = 'static', activeMas
 }
 
 /** Vecinos más cercanos y confianza ponderada por cercanía y margen de separación. */
-function rank(vector, samples, k, scale, type = 'static', activeMask = null) {
+function rank(vector, samples, k, scale, type = 'static', activeMask = null, flexOnly = false) {
   if (!Array.isArray(vector) || vector.length === 0) return null
   if (!Array.isArray(samples) || samples.length === 0) return null
 
@@ -249,7 +268,7 @@ function rank(vector, samples, k, scale, type = 'static', activeMask = null) {
     .map((sample) => ({
       label: sample.label,
       handMode: normalizeHandMode(sample.handMode),
-      distance: handDistance(vector, sample.vector, sample.handMode, type, activeMask),
+      distance: handDistance(vector, sample.vector, sample.handMode, type, activeMask, flexOnly),
     }))
 
   if (distances.length === 0) return null
@@ -311,10 +330,18 @@ function rank(vector, samples, k, scale, type = 'static', activeMask = null) {
  * @param {number} k número de vecinos
  * @param {number} scale escala de distancia
  * @param {boolean[]} [activeMask] máscara de canales flex válidos
+ * @param {boolean} [flexOnly] si es true, evalúa solo flex (100% flex, MPU6050 peso 0)
  */
-export function classify(vector, samples, k = K, scale = STATIC_DISTANCE_SCALE, activeMask = null) {
+export function classify(
+  vector,
+  samples,
+  k = K,
+  scale = STATIC_DISTANCE_SCALE,
+  activeMask = null,
+  flexOnly = false,
+) {
   const statics = (samples ?? []).filter((sample) => normalizeGestureType(sample.type) === 'static')
-  return rank(vector, statics, k, scale, 'static', activeMask)
+  return rank(vector, statics, k, scale, 'static', activeMask, flexOnly)
 }
 
 /**
@@ -325,10 +352,18 @@ export function classify(vector, samples, k = K, scale = STATIC_DISTANCE_SCALE, 
  * @param {number} k número de vecinos
  * @param {number} scale escala de distancia
  * @param {boolean[]} [activeMask] máscara de canales flex válidos
+ * @param {boolean} [flexOnly] si es true, evalúa solo flex
  */
-export function classifyTrajectory(trajectory, samples, k = K, scale = DYNAMIC_DISTANCE_SCALE, activeMask = null) {
+export function classifyTrajectory(
+  trajectory,
+  samples,
+  k = K,
+  scale = DYNAMIC_DISTANCE_SCALE,
+  activeMask = null,
+  flexOnly = false,
+) {
   const dynamics = (samples ?? []).filter((sample) => sample.type === 'dynamic')
-  return rank(trajectory, dynamics, k, scale, 'dynamic', activeMask)
+  return rank(trajectory, dynamics, k, scale, 'dynamic', activeMask, flexOnly)
 }
 
 /** Convierte el entrenamiento guardado en la lista plana de muestras. */

@@ -44,18 +44,51 @@ export const FINGER_NAMES = [
   'Meñique (GPIO 32)',
 ]
 
+/**
+ * Valores medidos en hardware real en guante derecho (KLAPS_Guante_D):
+ * Al cerrar el puño los valores crudos del ADC disminuyen (invertidos):
+ *   - Pulgar:  Abierto 1000 -> Cerrado 900 (span: 100)
+ *   - Índice:  Abierto 1034 -> Cerrado 959 (span: 75)
+ *   - Medio:   Abierto 1030 -> Cerrado 895 (span: 135)
+ *   - Anular:  0 fijo (desconectado, ignorar con peso 0)
+ *   - Meñique: Abierto 850  -> Cerrado 752 (span: 98)
+ * (Índices 0..4 = Guante Derecho, 5..9 = Guante Izquierdo)
+ */
+export const DEFAULT_OPEN_RAW = [1000, 1034, 1030, 0, 850, 1000, 1034, 1030, 0, 850]
+export const DEFAULT_CLOSED_RAW = [900, 959, 895, 0, 752, 900, 959, 895, 0, 752]
+export const DEFAULT_VALID = [true, true, true, false, true, true, true, true, false, true]
+
+export const DEFAULT_CALIBRATION = {
+  version: 1,
+  createdAt: 1763000000000,
+  flex: {
+    openRaw: [...DEFAULT_OPEN_RAW],
+    closedRaw: [...DEFAULT_CLOSED_RAW],
+    min: [900, 959, 895, 0, 752, 900, 959, 895, 0, 752],
+    max: [1000, 1034, 1030, 0, 850, 1000, 1034, 1030, 0, 850],
+    valid: [...DEFAULT_VALID],
+  },
+  imu: {
+    derecho: { ax: 0, ay: 0, az: 0, gx: 0, gy: 0, gz: 0 },
+    izquierdo: { ax: 0, ay: 0, az: 0, gx: 0, gy: 0, gz: 0 },
+  },
+  samples: { stretched: 40, closed: 40, neutral: 40 },
+}
+
 /** Asistente rápido de 2 pasos para compensación de hardware en tiempo real */
 export const QUICK_CALIBRATION_STEPS = [
   {
     key: 'stretched',
     title: 'Paso 1: Mano abierta (2s)',
-    instruction: 'Extiende todos los dedos al máximo con la palma hacia abajo. Se registrará la línea base mínima (0 %).',
+    instruction:
+      'Extiende todos los dedos al máximo con la palma hacia abajo. Se registrarán los valores abiertos (0 % de flexión).',
     icon: 'open',
   },
   {
     key: 'closed',
     title: 'Paso 2: Puño cerrado (2s)',
-    instruction: 'Cierra el puño con firmeza con todos los dedos apretados. Se registrará el tope máximo (100 %).',
+    instruction:
+      'Cierra el puño con firmeza con todos los dedos apretados. Se registrarán los valores cerrados (100 % de flexión).',
     icon: 'fist',
   },
 ]
@@ -85,27 +118,45 @@ export const CALIBRATION_STEPS = [
 const EMPTY_OFFSET = { ax: 0, ay: 0, az: 0, gx: 0, gy: 0, gz: 0 }
 const AXES = ['ax', 'ay', 'az', 'gx', 'gy', 'gz']
 
-const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 const isFiniteNumber = (value) => typeof value === 'number' && Number.isFinite(value)
 
 /** ¿Hay una calibración utilizable? */
 export function isCalibrationUsable(calibration) {
-  if (!calibration?.flex?.min || !calibration?.flex?.max) return false
-  return calibration.flex.min.length === 10 && calibration.flex.max.length === 10
+  if (!calibration?.flex) return false
+  if (Array.isArray(calibration.flex.openRaw) && Array.isArray(calibration.flex.closedRaw)) {
+    return calibration.flex.openRaw.length === 10 && calibration.flex.closedRaw.length === 10
+  }
+  return Boolean(calibration.flex.min?.length === 10 && calibration.flex.max?.length === 10)
 }
 
 /** Valida y normaliza lo que venga de localStorage o de la captura. */
 export function normalizeCalibration(raw) {
-  if (!isCalibrationUsable(raw)) return null
+  if (!isCalibrationUsable(raw)) return DEFAULT_CALIBRATION
 
-  const min = raw.flex.min.map((value) => (isFiniteNumber(value) ? value : 0))
-  const max = raw.flex.max.map((value) => (isFiniteNumber(value) ? value : 100))
-  const valid = min.map((value, index) => {
+  const openRaw = Array.isArray(raw.flex.openRaw)
+    ? raw.flex.openRaw.map((value, i) => (isFiniteNumber(value) ? value : DEFAULT_OPEN_RAW[i]))
+    : (raw.flex.max ?? DEFAULT_OPEN_RAW).map((value, i) =>
+        isFiniteNumber(value) ? value : DEFAULT_OPEN_RAW[i],
+      )
+
+  const closedRaw = Array.isArray(raw.flex.closedRaw)
+    ? raw.flex.closedRaw.map((value, i) => (isFiniteNumber(value) ? value : DEFAULT_CLOSED_RAW[i]))
+    : (raw.flex.min ?? DEFAULT_CLOSED_RAW).map((value, i) =>
+        isFiniteNumber(value) ? value : DEFAULT_CLOSED_RAW[i],
+      )
+
+  const valid = openRaw.map((openVal, index) => {
+    const closedVal = closedRaw[index]
+    // Si el valor crudo en abierto y cerrado es 0 (ej. Anular desconectado)
+    if (openVal === 0 && closedVal === 0) return false
     if (Array.isArray(raw.flex.valid) && typeof raw.flex.valid[index] === 'boolean') {
       return raw.flex.valid[index]
     }
-    return max[index] - value >= MIN_FLEX_SPAN
+    return Math.abs(openVal - closedVal) >= MIN_FLEX_SPAN
   })
+
+  const min = openRaw.map((o, i) => Math.min(o, closedRaw[i]))
+  const max = openRaw.map((o, i) => Math.max(o, closedRaw[i]))
 
   const offset = (side) => {
     const source = raw.imu?.[side] ?? {}
@@ -118,7 +169,7 @@ export function normalizeCalibration(raw) {
   return {
     version: 1,
     createdAt: isFiniteNumber(raw.createdAt) ? raw.createdAt : Date.now(),
-    flex: { min, max, valid },
+    flex: { openRaw, closedRaw, min, max, valid },
     imu: { derecho: offset('derecho'), izquierdo: offset('izquierdo') },
     samples: {
       stretched: raw.samples?.stretched ?? 0,
@@ -129,13 +180,13 @@ export function normalizeCalibration(raw) {
 }
 
 export function loadCalibration() {
-  if (typeof window === 'undefined') return null
+  if (typeof window === 'undefined') return DEFAULT_CALIBRATION
   try {
     const raw = window.localStorage.getItem(CALIBRATION_KEY)
-    if (!raw) return null
-    return normalizeCalibration(JSON.parse(raw))
+    if (!raw) return DEFAULT_CALIBRATION
+    return normalizeCalibration(JSON.parse(raw)) ?? DEFAULT_CALIBRATION
   } catch {
-    return null
+    return DEFAULT_CALIBRATION
   }
 }
 
@@ -159,7 +210,7 @@ export function clearCalibration() {
       // nada que limpiar
     }
   }
-  return null
+  return DEFAULT_CALIBRATION
 }
 
 /** Media de un eje del IMU en una lista de lecturas (ignora lecturas vacías). */
@@ -189,41 +240,61 @@ function flexSnapshot(snapshot) {
 }
 
 /**
- * Construye la calibración a partir de las tres capturas.
- * Cada captura es una lista de instantáneas `{ derecho, izquierdo }`.
+ * Construye la calibración a partir de las capturas de mano abierta y puño cerrado.
+ * Promedia los valores crudos del ADC para openRaw y closedRaw.
  *
- * Si un dedo no cambia lo suficiente entre «estirado» y «doblado», se marca
- * como no válido y se deja tal cual: mejor eso que estropear el vector de una
- * mano entera cuando el firmware todavía no lee los flex.
+ * Fórmula oficial de porcentaje:
+ * flex % = clamp((openRaw - raw) / (openRaw - closedRaw), 0, 1) * 100
+ *
+ * El dedo anular desconectado (raw === 0) se marca como valid = false y peso = 0.
  */
 export function buildCalibration({ stretched = [], closed = [], neutral = [] } = {}) {
-  const min = Array.from({ length: 10 }, () => null)
-  const max = Array.from({ length: 10 }, () => null)
+  const openSamples = Array.from({ length: 10 }, () => [])
+  const closedSamples = Array.from({ length: 10 }, () => [])
 
   for (const snapshot of stretched) {
     flexSnapshot(snapshot).forEach((value, index) => {
       if (!isFiniteNumber(value)) return
-      if (min[index] === null || value < min[index]) min[index] = value
+      openSamples[index].push(value)
     })
   }
 
   for (const snapshot of closed) {
     flexSnapshot(snapshot).forEach((value, index) => {
       if (!isFiniteNumber(value)) return
-      if (max[index] === null || value > max[index]) max[index] = value
+      closedSamples[index].push(value)
     })
   }
 
-  const valid = min.map(
-    (low, index) => low !== null && max[index] !== null && max[index] - low >= MIN_FLEX_SPAN,
-  )
+  const openRaw = openSamples.map((vals, idx) => {
+    if (vals.length === 0) return DEFAULT_OPEN_RAW[idx]
+    const avg = vals.reduce((a, b) => a + b, 0) / vals.length
+    return Math.round(avg)
+  })
+
+  const closedRaw = closedSamples.map((vals, idx) => {
+    if (vals.length === 0) return DEFAULT_CLOSED_RAW[idx]
+    const avg = vals.reduce((a, b) => a + b, 0) / vals.length
+    return Math.round(avg)
+  })
+
+  const valid = openRaw.map((openVal, index) => {
+    const closedVal = closedRaw[index]
+    if (openVal === 0 && closedVal === 0) return false
+    return Math.abs(openVal - closedVal) >= MIN_FLEX_SPAN
+  })
+
+  const min = openRaw.map((o, i) => Math.min(o, closedRaw[i]))
+  const max = openRaw.map((o, i) => Math.max(o, closedRaw[i]))
 
   return {
     version: 1,
     createdAt: Date.now(),
     flex: {
-      min: min.map((value, index) => (valid[index] ? clamp(value, 0, 100) : 0)),
-      max: max.map((value, index) => (valid[index] ? clamp(value, 0, 100) : 100)),
+      openRaw,
+      closedRaw,
+      min,
+      max,
       valid,
     },
     imu: {
@@ -244,19 +315,25 @@ export function buildQuickCalibration({ stretched = [], closed = [] } = {}) {
 
 /** Resumen legible para la interfaz con detalle de canales activos y pesos asignados. */
 export function describeCalibration(calibration) {
-  if (!isCalibrationUsable(calibration)) return null
+  const safeCal = normalizeCalibration(calibration) ?? DEFAULT_CALIBRATION
 
   const ranges = (offset, handLabel = '') =>
     Array.from({ length: 5 }, (_, index) => {
       const position = offset + index
-      const low = Math.round(calibration.flex.min[position])
-      const high = Math.round(calibration.flex.max[position])
-      const span = high - low
-      const valid = Boolean(calibration.flex.valid[position])
+      const open = Math.round(safeCal.flex.openRaw[position])
+      const closed = Math.round(safeCal.flex.closedRaw[position])
+      const span = Math.abs(open - closed)
+      const valid =
+        Boolean(safeCal.flex.valid[position]) && (open > 0 || closed > 0) && span >= MIN_FLEX_SPAN
 
       let status = 'activo'
+      let statusText = `Abierto ${open} → Cerrado ${closed} (Δ${span} · peso 1.4)`
       if (!valid) {
-        status = span <= 2 ? 'desconectado / 0V' : 'rango insuficiente (< 12 %)'
+        status = open === 0 && closed === 0 ? 'desconectado / 0V' : 'rango insuficiente (< 12 %)'
+        statusText =
+          open === 0 && closed === 0
+            ? 'raw 0 · peso 0 (desconectado / ignorado)'
+            : `Abierto ${open} → Cerrado ${closed} (inactivo · peso 0)`
       }
 
       const fingerName = FINGER_NAMES[index] || `Dedo ${index}`
@@ -265,34 +342,34 @@ export function describeCalibration(calibration) {
         name: handLabel ? `${fingerName} (${handLabel})` : fingerName,
         valid,
         isActive: valid,
-        min: low,
-        max: high,
+        openRaw: open,
+        closedRaw: closed,
+        min: Math.min(open, closed),
+        max: Math.max(open, closed),
         span,
         status,
-        statusText: valid
-          ? `Rango ${low}% - ${high}% (activo · peso 1.4)`
-          : `${low}% - ${high}% (inactivo · peso 0)`,
+        statusText,
         weight: valid ? 1.4 : 0,
       }
     })
 
   const derechoRanges = ranges(0, '')
   const izquierdoRanges = ranges(5, 'izq')
-  const validCount = calibration.flex.valid.filter(Boolean).length
+  const validCount = safeCal.flex.valid.filter(Boolean).length
 
   return {
-    createdAt: calibration.createdAt,
+    createdAt: safeCal.createdAt,
     validCount,
     activeFlexCount: validCount,
     deadFlexCount: 10 - validCount,
     ready: true,
     summary:
       validCount > 0
-        ? `${validCount} sensores flex activos (peso 1.4) · canales muertos anulados (peso 0)`
+        ? `${validCount} sensores flex activos (peso 1.4) · Anular ignorado (peso 0)`
         : 'Calibración activa basada en MPU6050 (pitch/roll)',
     derecho: derechoRanges,
     izquierdo: izquierdoRanges,
     fingerChannels: derechoRanges,
-    imu: calibration.imu,
+    imu: safeCal.imu,
   }
 }

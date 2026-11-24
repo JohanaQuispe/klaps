@@ -15,10 +15,10 @@ import { trajectoryFromFrames } from '../services/gesture/trajectory.js'
 /** Bucle de clasificación: 20 Hz, igual que la frecuencia de la trama. */
 export const LOOP_MS = 50
 /**
- * Seña estática: debe mantenerse firme durante 1.5 s continuos
+ * Seña estática: debe mantenerse firme durante 1.4 s continuos
  * antes de darla por buena, evitando disparos accidentales en posturas intermedias.
  */
-export const HOLD_MS = 1500
+export const HOLD_MS = 1400
 /**
  * Seña dinámica: basta con que la trayectoria supere el umbral durante
  * dos ciclos (100 ms). No se exige quedarse quieto al terminar el gesto.
@@ -84,6 +84,7 @@ export function useGestureRecognition({
   cooldownMs = COOLDOWN_MS,
   windowFrames = DYNAMIC_WINDOW_FRAMES,
   availableHands = ALL_HANDS,
+  flexOnly = false,
 } = {}) {
   const vectorRef = useRef(vector)
   const samplesRef = useRef([])
@@ -180,7 +181,7 @@ export function useGestureRecognition({
       // ── Control de Latch & Release ────────────────────────────────────
       if (latchedRef.current) {
         const latchedVector = latchedRef.current.vector
-        const latchedDist = handDistance(current, latchedVector, 'both', 'static', activeMask)
+        const latchedDist = handDistance(current, latchedVector, 'both', 'static', activeMask, flexOnly)
         const latchedSim = similarityFromDistance(latchedDist, STATIC_DISTANCE_SCALE)
 
         // Detección de movimiento de transición por MPU6050
@@ -197,10 +198,10 @@ export function useGestureRecognition({
         }
 
         // Criterios de liberación obligatorios:
-        // 1) Similitud cae de 65 % (cambió de postura)
-        // 2) Movimiento sostenido de transición durante ≥ 0.6 s
+        // 1) Similitud cae de 68 % o distancia aumenta (cambió de postura de dedos)
+        // 2) Movimiento sostenido de transición durante ≥ 0.5 s
         // 3) Paso a reposo físico
-        const released = latchedSim < 0.65 || motionDurationRef.current >= 600
+        const released = latchedSim < 0.68 || latchedDist > 14.5 || motionDurationRef.current >= 500
 
         if (released) {
           latchedRef.current = null
@@ -241,7 +242,7 @@ export function useGestureRecognition({
 
         const trajectory = trajectoryFromFrames(buffer)
         const dynamicResult = trajectory
-          ? classifyTrajectory(trajectory, dynamicSamples, K, 70, activeMask)
+          ? classifyTrajectory(trajectory, dynamicSamples, K, 70, activeMask, flexOnly)
           : null
         const withinThreshold =
           dynamicResult &&
@@ -293,7 +294,7 @@ export function useGestureRecognition({
         return
       }
 
-      const result = classify(current, staticSamples, K, STATIC_DISTANCE_SCALE, activeMask)
+      const result = classify(current, staticSamples, K, STATIC_DISTANCE_SCALE, activeMask, flexOnly)
 
       // Seña «0» aprendida: pausa en lugar de palabra
       if (
@@ -364,7 +365,7 @@ export function useGestureRecognition({
       latchedRef.current = null
       motionDurationRef.current = 0
     }
-  }, [enabled, threshold, holdMs, dynamicConfirmMs, cooldownMs, windowFrames])
+  }, [enabled, threshold, holdMs, dynamicConfirmMs, cooldownMs, windowFrames, flexOnly])
 
   return {
     live: enabled ? live : null,

@@ -31,6 +31,8 @@ export default function App() {
         <Route path="/emergencia" element={<Emergency />} />
         <Route path="/dispositivos" element={<Devices />} />
         <Route path="/dispositivos/diagnostico" element={<Diagnostics />} />
+        <Route path="/guantes" element={<Devices />} />
+        <Route path="/guantes/diagnostico" element={<Diagnostics />} />
         <Route path="/entrenamiento" element={<Training />} />
         <Route path="/ajustes" element={<Settings />} />
 
