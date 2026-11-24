@@ -48,6 +48,7 @@ import {
   getRecognitionSpeed,
   RECOGNITION_SPEEDS,
 } from '../../services/gesture/recognitionConfig.js'
+import { saveCanonicalSigns } from '../../services/gesture/canonicalSigns.js'
 import { cn } from '../../utils/cn'
 import {
   buildAlertMessage,
@@ -179,6 +180,11 @@ export default function Translation() {
       window.removeEventListener('storage', refresh)
     }
   }, [])
+
+  const handleLoadCanonical = () => {
+    const next = saveCanonicalSigns(training)
+    setTraining(next)
+  }
 
   const openSosPrompt = useCallback(() => {
     setSosPrompt({
@@ -665,7 +671,7 @@ export default function Translation() {
           </div>
         </div>
 
-        {/* Indicador de Motor: 100% Flex (MPU6050 solo SOS) y barras de flexión en vivo */}
+        {/* Indicador de Motor Híbrido: Estáticas 100% Flex · Dinámicas MPU6050 + Flex */}
         <div className="mt-4 rounded-xl border border-brand-200 bg-linear-to-b from-brand-50/90 to-white p-4 shadow-xs">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="inline-flex items-center gap-2">
@@ -674,16 +680,24 @@ export default function Translation() {
                 <span className="relative inline-flex size-2.5 rounded-full bg-success" />
               </span>
               <span className="text-xs font-black uppercase tracking-wider text-brand-900">
-                Motor: 100% Flex (MPU6050 solo SOS)
+                Motor Híbrido: Estáticas 100% Flex · Dinámicas MPU6050 + Flex
               </span>
             </div>
-            <span className="text-[0.7rem] font-semibold text-brand-700">
-              Muñeca/MPU6050 peso 0 · Anular ignorado (peso 0)
-            </span>
+            <div className="flex flex-wrap items-center gap-1.5 text-[0.7rem] font-semibold text-brand-700">
+              <span className="rounded-full bg-brand-100/90 px-2 py-0.5 text-brand-800">
+                Estáticas: Muñeca peso 0
+              </span>
+              <span className="rounded-full bg-lavender/90 px-2 py-0.5 text-brand-800">
+                Dinámicas: MPU6050 activo
+              </span>
+              <span className="rounded-full bg-danger-soft px-2 py-0.5 text-danger font-bold">
+                SOS: Puño + 4s
+              </span>
+            </div>
           </div>
 
           <p className="mt-1 text-[0.7rem] text-ink-soft">
-            La coincidencia de la seña depende exclusivamente de los 4 dedos activos (tolerancia ±12%, descarte inmediato si &gt;18%). Mover la muñeca en el aire no altera el porcentaje de coincidencia.
+            Señas estáticas evaluadas al 100% en los 4 dedos (tolerancia ±12%, descarte &gt;18%). Señas dinámicas evalúan la trayectoria espacio-temporal con giroscopio y acelerómetro.
           </p>
 
           {/* Barras porcentuales en vivo de los 4 dedos flex activos */}
@@ -714,7 +728,51 @@ export default function Translation() {
               </div>
             ))}
           </div>
+
+          {/* Indicador de modo en vivo si hay detección activa */}
+          {live && (
+            <div className="mt-2.5 flex items-center justify-between text-[0.7rem] border-t border-brand-100 pt-2 font-medium">
+              <span className="text-ink-soft">
+                Modo detectado:{' '}
+                <strong className={live.mode === 'dynamic' ? 'text-brand-700' : 'text-brand-900'}>
+                  {live.mode === 'dynamic'
+                    ? '⚡ Seña Dinámica (Trayectoria MPU6050 + Flex)'
+                    : '🎯 Seña Estática (100% Flex · Muñeca libre)'}
+                </strong>
+              </span>
+              <span className="text-ink-soft font-mono">
+                {live.distance === Infinity ? 'Descartado (>18%)' : `RMS: ${live.distance.toFixed(1)}`}
+              </span>
+            </div>
+          )}
         </div>
+
+        {/* Banner de inicialización rápida cuando no hay señas guardadas */}
+        {activeSigns.length === 0 && (
+          <div className="mt-4 rounded-xl border border-dashed border-brand-300 bg-brand-50/90 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <Sparkles className="size-5 text-brand-600 shrink-0 mt-0.5" aria-hidden="true" />
+                <div>
+                  <p className="text-xs font-bold text-brand-900">
+                    No hay señas guardadas para este modo en el navegador
+                  </p>
+                  <p className="mt-0.5 text-[0.72rem] text-brand-700">
+                    Guarda de inmediato las señas principales maestras de KLAPS (Hola, Bien, Ayuda, Adiós, Gracias, Por favor) para comenzar a traducir al instante.
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant="primary"
+                icon={Sparkles}
+                onClick={handleLoadCanonical}
+              >
+                Guardar señas principales
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Señal en vivo: etiqueta, confianza y tiempo estabilizado */}
         <div className="mt-4 rounded-md border border-brand-100 bg-white px-4 py-3">
