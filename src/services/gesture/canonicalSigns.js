@@ -188,6 +188,28 @@ export function saveCanonicalSigns(currentTraining) {
   return saveTraining(merged)
 }
 
+/**
+ * Restablece el almacén de señas a EXCLUSIVAMENTE las señas maestras oficiales,
+ * eliminando señas antiguas de prueba, letras aisladas (como 'A') o registros corruptos.
+ *
+ * @returns {object} estado de entrenamiento con las 6 señas canónicas
+ */
+export function resetToCanonicalSigns() {
+  const training = {
+    version: 2,
+    signs: CANONICAL_SIGNS.map((sign, index) => ({
+      id: `canonical-${index}-${sign.label.toLowerCase()}`,
+      label: sign.label,
+      handMode: sign.handMode,
+      gestureType: sign.gestureType,
+      description: sign.description,
+      createdAt: Date.now(),
+      samples: sign.samples,
+    })),
+  }
+  return saveTraining(training)
+}
+
 /** Comprueba si el entrenamiento ya tiene cargadas las señas maestras principales. */
 export function hasCanonicalSigns(training) {
   if (!training?.signs || training.signs.length === 0) return false

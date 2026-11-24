@@ -48,7 +48,7 @@ import {
   getRecognitionSpeed,
   RECOGNITION_SPEEDS,
 } from '../../services/gesture/recognitionConfig.js'
-import { saveCanonicalSigns } from '../../services/gesture/canonicalSigns.js'
+import { resetToCanonicalSigns, saveCanonicalSigns } from '../../services/gesture/canonicalSigns.js'
 import { cn } from '../../utils/cn'
 import {
   buildAlertMessage,
@@ -105,19 +105,6 @@ export default function Translation() {
   const [correctionNotes, setCorrectionNotes] = useState([])
   const [sosSign, setSosSign] = useState(null)
 
-  // ── Modo de traducción: Palabras y frases vs Deletreo (Vocales) ──
-  const [translationMode, setTranslationMode] = useState(() => {
-    if (typeof window === 'undefined') return 'words'
-    return window.localStorage.getItem('klaps.translation.mode') || 'words'
-  })
-
-  const handleSetTranslationMode = (mode) => {
-    setTranslationMode(mode)
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('klaps.translation.mode', mode)
-    }
-  }
-
   // ── Síntesis y Redacción con IA tras pausa de 2.2 segundos ──
   const [redactedText, setRedactedText] = useState('')
   const [isAiRedacting, setIsAiRedacting] = useState(false)
@@ -155,14 +142,13 @@ export default function Translation() {
   }, [])
 
   const signs = training.signs
-  const isVowelSign = (label) => /^[aeiouáéíóú]$/i.test(String(label).trim())
+  const isSingleLetterOrVowel = (label) => /^[a-záéíóú]$/i.test(String(label).trim())
 
   const activeSigns = useMemo(() => {
-    if (translationMode === 'words') {
-      return signs.filter((sign) => !isVowelSign(sign.label))
-    }
-    return signs
-  }, [signs, translationMode])
+    // Se descartan letras sueltas y vocales para evitar que posturas abiertas
+    // o puños disparen letras aisladas como 'A'
+    return signs.filter((sign) => !isSingleLetterOrVowel(sign.label))
+  }, [signs])
 
   const connected = gloves.filter((glove) => glove.status === 'conectado').length
   const text = words.join(' ')
@@ -530,45 +516,29 @@ export default function Translation() {
       )}
 
       <Card padding="lg">
-        {/* Selector de modo: Palabras y frases vs Deletreo */}
+        {/* Modo de traducción: Palabras y Frases en LSP */}
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand-200 bg-brand-50/80 p-3">
           <div className="flex items-center gap-2">
             <Layers className="size-4 text-brand-600 shrink-0" aria-hidden="true" />
             <div>
-              <p className="text-xs font-bold text-brand-900">Modo de traducción</p>
+              <p className="text-xs font-bold text-brand-900">Traducción de Palabras y Gestos Oficiales (LSP)</p>
               <p className="text-[0.7rem] text-ink-soft">
-                {translationMode === 'words'
-                  ? 'Modo Palabras: vocales A E I O U descartadas para evitar falsos positivos con palabras completas.'
-                  : 'Modo Deletreo: evalúa tanto vocales como palabras.'}
+                Motor Híbrido inteligente: reconocimiento de palabras completas (Hola, Bien, Ayuda, Adiós, Gracias, Por favor).
               </p>
             </div>
           </div>
-          <div className="flex gap-1.5 rounded-md bg-white p-1 border border-brand-200">
-            <button
-              type="button"
-              onClick={() => handleSetTranslationMode('words')}
-              className={cn(
-                'rounded px-3 py-1.5 text-xs font-bold transition-all',
-                translationMode === 'words'
-                  ? 'bg-brand-600 text-white shadow-soft'
-                  : 'text-brand-800 hover:bg-brand-50',
-              )}
-            >
-              💬 Modo Palabras y Frases
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSetTranslationMode('spelling')}
-              className={cn(
-                'rounded px-3 py-1.5 text-xs font-bold transition-all',
-                translationMode === 'spelling'
-                  ? 'bg-brand-600 text-white shadow-soft'
-                  : 'text-brand-800 hover:bg-brand-50',
-              )}
-            >
-              🔤 Modo Deletreo (Vocales)
-            </button>
-          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={RotateCcw}
+            onClick={() => {
+              const reset = resetToCanonicalSigns()
+              setTraining(reset)
+            }}
+            title="Elimina señas no usadas o de prueba y restaura las señas maestras oficiales"
+          >
+            Restablecer señas maestras
+          </Button>
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1014,9 +984,11 @@ export default function Translation() {
 
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-md bg-brand-50 px-4 py-3">
         <p className="text-sm text-ink-soft">
-          <strong className="font-semibold text-ink">{signs.length}</strong>{' '}
-          {signs.length === 1 ? 'seña entrenada' : 'señas entrenadas'} ·{' '}
-          <strong className="font-semibold text-ink">{connected}</strong> de 2 guantes conectados
+          <strong className="font-semibold text-ink">{activeSigns.length}</strong>{' '}
+          {activeSigns.length === 1 ? 'seña activa' : 'señas activas'} ·{' '}
+          <strong className="font-semibold text-ink">
+            {connected > 0 ? (connected === 1 ? '1 guante conectado' : `${connected} guantes conectados`) : 'Sin guantes conectados'}
+          </strong>
         </p>
         <Button as={Link} to="/entrenamiento" variant="secondary" size="sm" icon={Bluetooth}>
           Calibrar y entrenar
