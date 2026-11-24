@@ -107,22 +107,24 @@ export const CANONICAL_SIGNS = [
     label: 'Hola',
     handMode: 'right',
     gestureType: 'static',
-    description: 'Mano abierta extendida con los 4 dedos activos rectos (100% Flex)',
+    description: 'Mano abierta extendida con los 4 dedos activos rectos (0-5% Flex)',
     samples: [
-      { vector: buildStaticVector([8, 10, 8, 0, 10]), at: now },
-      { vector: buildStaticVector([10, 12, 10, 0, 12]), at: now + 50 },
-      { vector: buildStaticVector([7, 9, 8, 0, 9]), at: now + 100 },
+      { vector: buildStaticVector([0, 0, 0, 0, 0]), at: now },
+      { vector: buildStaticVector([2, 0, 0, 0, 0]), at: now + 50 },
+      { vector: buildStaticVector([3, 2, 2, 0, 2]), at: now + 100 },
+      { vector: buildStaticVector([0, 2, 0, 0, 0]), at: now + 150 },
     ],
   },
   {
     label: 'Bien',
     handMode: 'right',
     gestureType: 'static',
-    description: 'Pulgar arriba, índice, medio y meñique doblados en puño (100% Flex)',
+    description: 'Pulgar arriba (0%), índice, medio y meñique doblados en puño (75-100%)',
     samples: [
-      { vector: buildStaticVector([10, 88, 86, 0, 90]), at: now },
-      { vector: buildStaticVector([12, 90, 88, 0, 92]), at: now + 50 },
-      { vector: buildStaticVector([9, 86, 85, 0, 88]), at: now + 100 },
+      { vector: buildStaticVector([0, 80, 98, 0, 84]), at: now },
+      { vector: buildStaticVector([2, 78, 100, 0, 82]), at: now + 50 },
+      { vector: buildStaticVector([0, 82, 96, 0, 85]), at: now + 100 },
+      { vector: buildStaticVector([3, 90, 100, 0, 92]), at: now + 150 },
     ],
   },
   {
@@ -131,9 +133,9 @@ export const CANONICAL_SIGNS = [
     gestureType: 'static',
     description: 'Mano en puño firme con pulgar erecto en posición de socorro',
     samples: [
-      { vector: buildStaticVector([15, 84, 84, 0, 86]), at: now },
-      { vector: buildStaticVector([18, 86, 86, 0, 88]), at: now + 50 },
-      { vector: buildStaticVector([14, 82, 83, 0, 84]), at: now + 100 },
+      { vector: buildStaticVector([0, 78, 98, 0, 82]), at: now },
+      { vector: buildStaticVector([2, 80, 100, 0, 85]), at: now + 50 },
+      { vector: buildStaticVector([5, 82, 96, 0, 80]), at: now + 100 },
     ],
   },
   {
@@ -142,8 +144,9 @@ export const CANONICAL_SIGNS = [
     gestureType: 'dynamic',
     description: 'Mano abierta oscilando de lado a lado en el aire (Giroscopio gx + Flex)',
     samples: [
-      { vector: buildWavingTrajectory([10, 10, 10, 0, 12]), at: now },
-      { vector: buildWavingTrajectory([12, 12, 11, 0, 14]), at: now + 50 },
+      { vector: buildWavingTrajectory([0, 0, 0, 0, 0]), at: now },
+      { vector: buildWavingTrajectory([2, 0, 0, 0, 2]), at: now + 50 },
+      { vector: buildWavingTrajectory([5, 4, 3, 0, 4]), at: now + 100 },
     ],
   },
   {
@@ -152,8 +155,9 @@ export const CANONICAL_SIGNS = [
     gestureType: 'dynamic',
     description: 'Mano extendida con avance frontal hacia adelante (Aceleración ay + Flex)',
     samples: [
-      { vector: buildForwardTrajectory([12, 14, 12, 0, 14]), at: now },
-      { vector: buildForwardTrajectory([14, 16, 14, 0, 16]), at: now + 50 },
+      { vector: buildForwardTrajectory([0, 0, 0, 0, 0]), at: now },
+      { vector: buildForwardTrajectory([2, 2, 0, 0, 2]), at: now + 50 },
+      { vector: buildForwardTrajectory([5, 4, 3, 0, 4]), at: now + 100 },
     ],
   },
   {
@@ -162,8 +166,9 @@ export const CANONICAL_SIGNS = [
     gestureType: 'dynamic',
     description: 'Mano sobre el pecho con desplazamiento circular suave (Aceleración ax/ay)',
     samples: [
-      { vector: buildCircularTrajectory([15, 18, 18, 0, 18]), at: now },
-      { vector: buildCircularTrajectory([18, 20, 20, 0, 20]), at: now + 50 },
+      { vector: buildCircularTrajectory([0, 0, 0, 0, 0]), at: now },
+      { vector: buildCircularTrajectory([4, 4, 3, 0, 4]), at: now + 50 },
+      { vector: buildCircularTrajectory([5, 6, 5, 0, 5]), at: now + 100 },
     ],
   },
 ]
@@ -173,11 +178,12 @@ export const CANONICAL_VOWELS = [
     label: 'A',
     handMode: 'right',
     gestureType: 'static',
-    description: 'Vocal A: Puño cerrado con pulgar lateral apoyado contra el índice doblado',
+    description: 'Vocal A: Puño cerrado con pulgar apoyado contra el índice doblado',
     samples: [
-      { vector: buildStaticVector([30, 92, 90, 0, 92]), at: now },
-      { vector: buildStaticVector([28, 90, 88, 0, 90]), at: now + 50 },
-      { vector: buildStaticVector([32, 94, 92, 0, 94]), at: now + 100 },
+      { vector: buildStaticVector([100, 80, 100, 0, 82]), at: now },
+      { vector: buildStaticVector([98, 78, 98, 0, 85]), at: now + 50 },
+      { vector: buildStaticVector([98, 81, 100, 0, 82]), at: now + 100 },
+      { vector: buildStaticVector([45, 78, 98, 0, 82]), at: now + 150 }, // pulgar semi-lateral
     ],
   },
   {
@@ -186,9 +192,9 @@ export const CANONICAL_VOWELS = [
     gestureType: 'static',
     description: 'Vocal E: Dedos curvados en garra sobre la palma apoyados en el pulgar',
     samples: [
-      { vector: buildStaticVector([55, 65, 65, 0, 65]), at: now },
-      { vector: buildStaticVector([58, 68, 67, 0, 68]), at: now + 50 },
-      { vector: buildStaticVector([52, 62, 63, 0, 62]), at: now + 100 },
+      { vector: buildStaticVector([50, 55, 55, 0, 55]), at: now },
+      { vector: buildStaticVector([52, 58, 58, 0, 58]), at: now + 50 },
+      { vector: buildStaticVector([48, 52, 52, 0, 52]), at: now + 100 },
     ],
   },
   {
@@ -197,9 +203,9 @@ export const CANONICAL_VOWELS = [
     gestureType: 'static',
     description: 'Vocal I: Puño cerrado con solo el dedo meñique levantado y recto',
     samples: [
-      { vector: buildStaticVector([88, 90, 90, 0, 8]), at: now },
-      { vector: buildStaticVector([86, 92, 92, 0, 10]), at: now + 50 },
-      { vector: buildStaticVector([90, 88, 88, 0, 7]), at: now + 100 },
+      { vector: buildStaticVector([98, 78, 98, 0, 0]), at: now },
+      { vector: buildStaticVector([100, 80, 100, 0, 2]), at: now + 50 },
+      { vector: buildStaticVector([96, 76, 96, 0, 5]), at: now + 100 },
     ],
   },
   {
@@ -208,9 +214,9 @@ export const CANONICAL_VOWELS = [
     gestureType: 'static',
     description: 'Vocal O: Todos los dedos curvados formando un círculo cerrado con el pulgar',
     samples: [
-      { vector: buildStaticVector([48, 52, 50, 0, 52]), at: now },
-      { vector: buildStaticVector([50, 54, 52, 0, 54]), at: now + 50 },
-      { vector: buildStaticVector([46, 50, 48, 0, 50]), at: now + 100 },
+      { vector: buildStaticVector([40, 45, 45, 0, 45]), at: now },
+      { vector: buildStaticVector([42, 48, 48, 0, 48]), at: now + 50 },
+      { vector: buildStaticVector([38, 42, 42, 0, 42]), at: now + 100 },
     ],
   },
   {
@@ -219,9 +225,9 @@ export const CANONICAL_VOWELS = [
     gestureType: 'static',
     description: 'Vocal U: Dedo índice y medio erguidos juntos, pulgar y meñique doblados',
     samples: [
-      { vector: buildStaticVector([88, 8, 8, 0, 88]), at: now },
-      { vector: buildStaticVector([86, 10, 10, 0, 86]), at: now + 50 },
-      { vector: buildStaticVector([90, 7, 7, 0, 90]), at: now + 100 },
+      { vector: buildStaticVector([98, 0, 0, 0, 82]), at: now },
+      { vector: buildStaticVector([100, 2, 2, 0, 85]), at: now + 50 },
+      { vector: buildStaticVector([96, 5, 5, 0, 80]), at: now + 100 },
     ],
   },
 ]
