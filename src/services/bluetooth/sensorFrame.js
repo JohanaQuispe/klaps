@@ -29,23 +29,49 @@ export const GYRO_RANGE = 10 // ±10 rad/s
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
 /**
- * Convierte un valor crudo ADC de un sensor flex en porcentaje de flexión (0-100%).
- * Fórmula oficial con curva de contraste suave (smoothstep):
- * 1. Normalización Min-Max: clamp((openRaw - raw) / (openRaw - closedRaw), 0, 1)
- * 2. Curva de contraste: f(x) = 3x² - 2x³ para acentuar la separación entre
- *    posturas y discriminar nítidamente los 4 dedos activos en su recorrido (~75 a 135 ADC).
+ * Convierte un valor de flexión (porcentaje 0-100% de firmware o lectura ADC) en porcentaje calibrado (0-100%).
  *
- * Al cerrar el puño, los valores crudos del ADC disminuyen (openRaw > closedRaw),
- * por lo que el porcentaje crece de 0% a 100%. Si raw === 0 (anular desconectado), devuelve 0%.
+ * Características del algoritmo:
+ * 1. Detección automática de escala:
+ *    - Si `raw` viene en rango directo (0..100) pero la calibración guardada es de ADC (> 200),
+ *      se respeta el porcentaje del firmware sin distorsionar la señal.
+ * 2. Soporte para escala directa o invertida:
+ *    - `openRaw < closedRaw` (porcentaje directo del firmware o ADC directo).
+ *    - `openRaw > closedRaw` (ADC invertido de circuito divisor resistivo).
+ * 3. Curva de contraste suave (smoothstep):
+ *    - f(x) = 3x² - 2x³ para acentuar el 0% al tener la mano abierta y el 100% al cerrar el puño,
+ *      eliminando fluctuaciones de ruido y maximizando la separación entre gestos.
+ * 4. Desconexión de hardware: Si `raw === 0` (como el anular), devuelve 0%.
  */
 export function calculateFlexPercentage(raw, openRaw, closedRaw) {
   if (!Number.isFinite(raw) || raw === 0) return 0
-  if (!Number.isFinite(openRaw) || !Number.isFinite(closedRaw)) return 0
+  if (!Number.isFinite(openRaw) || !Number.isFinite(closedRaw)) {
+    return clamp(raw, 0, 100)
+  }
 
-  const span = openRaw - closedRaw
-  if (Math.abs(span) < 12) return 0
+  // Si raw está en rango directo (<= 100) pero los extremos calibrados son de ADC (> 200),
+  // el guante ya está enviando porcentaje 0-100 calculado por el firmware del ESP32.
+  if (raw <= 100 && Math.max(openRaw, closedRaw) > 200) {
+    const linear = clamp(raw / 100, 0, 1)
+    const contrasted = linear * linear * (3 - 2 * linear)
+    return contrasted * 100
+  }
 
-  const linear = clamp((openRaw - raw) / span, 0, 1)
+  const span = Math.abs(openRaw - closedRaw)
+  if (span < 12) {
+    const linear = clamp(raw <= 100 ? raw / 100 : raw, 0, 1)
+    return linear * 100
+  }
+
+  let linear
+  if (openRaw > closedRaw) {
+    // ADC invertido (el valor disminuye al doblar el dedo)
+    linear = clamp((openRaw - raw) / (openRaw - closedRaw), 0, 1)
+  } else {
+    // Escala directa (el porcentaje o ADC aumenta al doblar el dedo)
+    linear = clamp((raw - openRaw) / (closedRaw - openRaw), 0, 1)
+  }
+
   const contrasted = linear * linear * (3 - 2 * linear)
   return contrasted * 100
 }
