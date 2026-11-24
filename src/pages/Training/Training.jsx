@@ -8,6 +8,7 @@ import {
   Play,
   RotateCcw,
   Save,
+  Sparkles,
   Square,
   Trash2,
   Upload,
@@ -41,6 +42,10 @@ import {
   summarizeSigns,
 } from '../../services/gesture/knnClassifier.js'
 import { trajectoryFromFrames } from '../../services/gesture/trajectory.js'
+import {
+  CANONICAL_SIGNS,
+  saveCanonicalSigns,
+} from '../../services/gesture/canonicalSigns.js'
 import {
   DYNAMIC_SAMPLES,
   SAMPLE_INTERVAL_MS,
@@ -240,12 +245,13 @@ export default function Training() {
 
       let minDistance = Infinity
       let closestSign = null
+      const isDynamic = gestureType === 'dynamic'
 
       for (const existingSign of training.signs) {
         if (existingSign.label.toLowerCase() === name.toLowerCase()) continue
         for (const sample of existingSign.samples ?? []) {
           if (sample.vector?.length === meanVector.length) {
-            const dist = handDistance(meanVector, sample.vector, handMode, gestureType, activeMask, true)
+            const dist = handDistance(meanVector, sample.vector, handMode, gestureType, activeMask, !isDynamic)
             if (dist < minDistance) {
               minDistance = dist
               closestSign = existingSign
@@ -258,10 +264,14 @@ export default function Training() {
       setTraining(next)
       setLabel('')
 
+      const advice = isDynamic
+        ? 'Procura variar la trayectoria espacial o el sentido del movimiento para distinguirlas mejor.'
+        : 'Procura variar la postura de los 4 dedos (pulgar, índice, medio, meñique) para distinguirlas mejor.'
+
       const separationMsg =
         minDistance < 18 && closestSign
-          ? `⚠️ Advertencia: Separación estrecha (${minDistance.toFixed(1)}) frente a «${closestSign.label}». Procura variar la postura de los 4 dedos (pulgar, índice, medio, meñique) para distinguirlas mejor.`
-          : `Margen de separación óptimo (${minDistance === Infinity ? 'diferenciación clara de dedos' : `${minDistance.toFixed(1)} puntos`}).`
+          ? `⚠️ Advertencia: Separación estrecha (${minDistance.toFixed(1)}) frente a «${closestSign.label}». ${advice}`
+          : `Margen de separación óptimo (${minDistance === Infinity ? 'diferenciación clara' : `${minDistance.toFixed(1)} puntos`}).`
 
       setMessage(
         `«${name}» guardada con éxito (3 tomas consecutivas, ${stored.length} muestras). ${separationMsg}`,
@@ -355,6 +365,15 @@ export default function Training() {
     } finally {
       event.target.value = ''
     }
+  }
+
+  const handleLoadCanonical = () => {
+    const next = saveCanonicalSigns(training)
+    setTraining(next)
+    setMessage(
+      `¡Señas principales maestras guardadas para siempre! (${CANONICAL_SIGNS.length} señas canónicas listas: Hola, Bien, Ayuda, Adiós, Gracias, Por favor).`,
+    )
+    setError('')
   }
 
   const flexOf = (side) => readings[side]?.flex ?? null
@@ -728,6 +747,15 @@ export default function Training() {
           description={`${signs.length} señas (${summary.static} estáticas, ${summary.dynamic} dinámicas) · ${totalSamples(training)} muestras en este navegador`}
           action={
             <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="primary"
+                icon={Sparkles}
+                onClick={handleLoadCanonical}
+                title="Carga y guarda de forma permanente las señas maestras híbridas en este navegador"
+              >
+                Guardar señas principales
+              </Button>
               <Button size="sm" variant="secondary" icon={Download} onClick={download} disabled={signs.length === 0}>
                 Exportar
               </Button>
@@ -747,9 +775,22 @@ export default function Training() {
 
         <div className="mt-3">
           {signs.length === 0 ? (
-            <p className="rounded-md border border-dashed border-brand-200 bg-white/70 px-4 py-5 text-sm text-ink-soft">
-              Todavía no hay señas. Graba la primera con el formulario de arriba.
-            </p>
+            <div className="rounded-xl border border-dashed border-brand-200 bg-white/80 p-5 text-center sm:p-6">
+              <Sparkles className="mx-auto size-8 text-brand-600 mb-2" aria-hidden="true" />
+              <h3 className="text-base font-bold text-ink">Todavía no hay señas guardadas</h3>
+              <p className="mt-1 text-xs text-ink-soft max-w-md mx-auto">
+                Puedes grabar una seña desde el formulario de arriba o inicializar de inmediato las señas canónicas maestras de KLAPS (Hola, Bien, Gracias, Adiós, Por favor, Ayuda).
+              </p>
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                <Button
+                  size="sm"
+                  icon={Sparkles}
+                  onClick={handleLoadCanonical}
+                >
+                  Guardar señas principales (Guardar para siempre)
+                </Button>
+              </div>
+            </div>
           ) : (
             <ul className="space-y-2">
               {signs.map((sign) => (

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   CONFIDENCE_THRESHOLD,
+  DYNAMIC_DISTANCE_SCALE,
   K,
   STATIC_DISTANCE_SCALE,
   classify,
@@ -242,7 +243,7 @@ export function useGestureRecognition({
 
         const trajectory = trajectoryFromFrames(buffer)
         const dynamicResult = trajectory
-          ? classifyTrajectory(trajectory, dynamicSamples, K, 70, activeMask, flexOnly)
+          ? classifyTrajectory(trajectory, dynamicSamples, K, DYNAMIC_DISTANCE_SCALE, activeMask, false)
           : null
         const withinThreshold =
           dynamicResult &&
@@ -294,7 +295,7 @@ export function useGestureRecognition({
         return
       }
 
-      const result = classify(current, staticSamples, K, STATIC_DISTANCE_SCALE, activeMask, flexOnly)
+      const result = classify(current, staticSamples, K, STATIC_DISTANCE_SCALE, activeMask, true)
 
       // Seña «0» aprendida: pausa en lugar de palabra
       if (
