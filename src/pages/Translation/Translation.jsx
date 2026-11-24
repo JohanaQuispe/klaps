@@ -12,6 +12,7 @@ import {
   MessageCircle,
   Pause,
   Play,
+  RotateCcw,
   Save,
   Siren,
   SlidersHorizontal,
