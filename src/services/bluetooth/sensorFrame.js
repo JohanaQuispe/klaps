@@ -45,31 +45,51 @@ const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
  */
 export function calculateFlexPercentage(raw, openRaw, closedRaw) {
   if (!Number.isFinite(raw) || raw === 0) return 0
-  if (!Number.isFinite(openRaw) || !Number.isFinite(closedRaw)) {
-    return clamp(raw, 0, 100)
-  }
 
-  // Si raw está en rango directo (<= 100) pero los extremos calibrados son de ADC (> 200),
-  // el guante ya está enviando porcentaje 0-100 calculado por el firmware del ESP32.
-  if (raw <= 100 && Math.max(openRaw, closedRaw) > 200) {
+  // 1. Si raw viene en porcentaje directo (<= 100) pero la calibración guardada es de ADC (> 150):
+  //    Significa que la placa ESP32 ya convirtió el ADC en porcentaje 0-100%
+  if (raw <= 100 && Math.max(openRaw ?? 0, closedRaw ?? 0) > 150) {
     const linear = clamp(raw / 100, 0, 1)
     const contrasted = linear * linear * (3 - 2 * linear)
     return contrasted * 100
   }
 
-  const span = Math.abs(openRaw - closedRaw)
+  // 2. Si raw es una lectura ADC analógica directa (> 150):
+  if (raw > 150) {
+    // Si openRaw y closedRaw son por defecto (0 y 100) o no están en rango ADC,
+    // usamos la referencia física del hardware KLAPS (Abierto ~1030, Cerrado ~890)
+    const effOpen = openRaw && openRaw > 150 ? openRaw : 1030
+    const effClosed = closedRaw && closedRaw > 150 ? closedRaw : 890
+    const span = Math.abs(effOpen - effClosed)
+    if (span < 12) return 0
+
+    let linear
+    if (effOpen > effClosed) {
+      // Invertido (la tensión/ADC disminuye al doblar el dedo)
+      linear = clamp((effOpen - raw) / (effOpen - effClosed), 0, 1)
+    } else {
+      // Directo (la tensión/ADC aumenta al doblar el dedo)
+      linear = clamp((raw - effOpen) / (effClosed - effOpen), 0, 1)
+    }
+
+    const contrasted = linear * linear * (3 - 2 * linear)
+    return contrasted * 100
+  }
+
+  // 3. Si raw está en rango de porcentaje directo (<= 100):
+  const o = openRaw ?? 0
+  const c = closedRaw ?? 100
+  const span = Math.abs(o - c)
   if (span < 12) {
-    const linear = clamp(raw <= 100 ? raw / 100 : raw, 0, 1)
-    return linear * 100
+    const linear = clamp(raw / 100, 0, 1)
+    return linear * linear * (3 - 2 * linear) * 100
   }
 
   let linear
-  if (openRaw > closedRaw) {
-    // ADC invertido (el valor disminuye al doblar el dedo)
-    linear = clamp((openRaw - raw) / (openRaw - closedRaw), 0, 1)
+  if (o > c) {
+    linear = clamp((o - raw) / (o - c), 0, 1)
   } else {
-    // Escala directa (el porcentaje o ADC aumenta al doblar el dedo)
-    linear = clamp((raw - openRaw) / (closedRaw - openRaw), 0, 1)
+    linear = clamp((raw - o) / (c - o), 0, 1)
   }
 
   const contrasted = linear * linear * (3 - 2 * linear)
