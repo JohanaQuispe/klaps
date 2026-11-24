@@ -142,13 +142,7 @@ export default function Translation() {
   }, [])
 
   const signs = training.signs
-  const isSingleLetterOrVowel = (label) => /^[a-záéíóú]$/i.test(String(label).trim())
-
-  const activeSigns = useMemo(() => {
-    // Se descartan letras sueltas y vocales para evitar que posturas abiertas
-    // o puños disparen letras aisladas como 'A'
-    return signs.filter((sign) => !isSingleLetterOrVowel(sign.label))
-  }, [signs])
+  const activeSigns = signs
 
   const connected = gloves.filter((glove) => glove.status === 'conectado').length
   const text = words.join(' ')
@@ -523,7 +517,7 @@ export default function Translation() {
             <div>
               <p className="text-xs font-bold text-brand-900">Traducción de Palabras y Gestos Oficiales (LSP)</p>
               <p className="text-[0.7rem] text-ink-soft">
-                Motor Híbrido inteligente: reconocimiento de palabras completas (Hola, Bien, Ayuda, Adiós, Gracias, Por favor).
+                Motor Híbrido inteligente: reconocimiento de palabras completas (Hola, Bien, Ayuda, Adiós, Gracias, Por favor) y vocales (A, E, I, O, U).
               </p>
             </div>
           </div>

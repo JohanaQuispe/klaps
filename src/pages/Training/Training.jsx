@@ -43,9 +43,12 @@ import {
 } from '../../services/gesture/knnClassifier.js'
 import { trajectoryFromFrames } from '../../services/gesture/trajectory.js'
 import {
+  ALL_CANONICAL,
   CANONICAL_SIGNS,
+  CANONICAL_VOWELS,
   resetToCanonicalSigns,
   saveCanonicalSigns,
+  saveCanonicalVowels,
 } from '../../services/gesture/canonicalSigns.js'
 import {
   DYNAMIC_SAMPLES,
@@ -372,7 +375,16 @@ export default function Training() {
     const next = saveCanonicalSigns(training)
     setTraining(next)
     setMessage(
-      `¡Señas principales maestras guardadas para siempre! (${CANONICAL_SIGNS.length} señas canónicas listas: Hola, Bien, Ayuda, Adiós, Gracias, Por favor).`,
+      `¡Señas y vocales maestras guardadas para siempre! (${ALL_CANONICAL.length} señas listas: Hola, Bien, Ayuda, Adiós, Gracias, Por favor y Vocales A, E, I, O, U).`,
+    )
+    setError('')
+  }
+
+  const handleLoadVowels = () => {
+    const next = saveCanonicalVowels(training)
+    setTraining(next)
+    setMessage(
+      '¡Vocales A, E, I, O, U guardadas con éxito! Listas para traducirse o calibrarse con tus dedos.',
     )
     setError('')
   }
@@ -704,7 +716,7 @@ export default function Training() {
               id="sign-label"
               value={label}
               onChange={(event) => setLabel(event.target.value)}
-              placeholder="Hola, Gracias, Ayuda, Sí, No, Buenos días…"
+              placeholder="A, E, I, O, U, Hola, Gracias, Ayuda…"
               maxLength={60}
               className="mt-1 min-h-12 w-full rounded-md border border-brand-200 bg-white px-3 text-ink"
             />
@@ -743,9 +755,18 @@ export default function Training() {
                 variant="primary"
                 icon={Sparkles}
                 onClick={handleLoadCanonical}
-                title="Carga y guarda de forma permanente las señas maestras híbridas en este navegador"
+                title="Carga y guarda de forma permanente las señas maestras y vocales en este navegador"
               >
-                Guardar señas principales
+                Guardar señas y vocales
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={Sparkles}
+                onClick={handleLoadVowels}
+                title="Carga exclusivamente las 5 vocales (A, E, I, O, U)"
+              >
+                Cargar vocales (A, E, I, O, U)
               </Button>
               <Button
                 size="sm"
@@ -754,9 +775,9 @@ export default function Training() {
                 onClick={() => {
                   const reset = resetToCanonicalSigns()
                   setTraining(reset)
-                  setMessage('Señas restablecidas a las 6 señas maestras oficiales. Señas antiguas, letras aisladas y muestras de prueba eliminadas.')
+                  setMessage('Señas restablecidas a las 11 oficiales (Hola, Bien, Ayuda, Adiós, Gracias, Por favor y Vocales A, E, I, O, U). Muestras corruptas eliminadas.')
                 }}
-                title="Restaura exclusivamente las señas maestras oficiales, limpiando señas no usadas o de prueba"
+                title="Restaura las señas maestras y vocales oficiales, limpiando muestras de prueba corruptas"
               >
                 Limpiar no usadas
               </Button>
