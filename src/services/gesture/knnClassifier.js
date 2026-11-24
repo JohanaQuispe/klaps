@@ -145,25 +145,36 @@ export function handView(vector, handMode = 'both') {
 }
 
 /**
- * Pesos de un paso clave según la mano y el tipo de seña.
- * Se reutilizan por paso: una trayectoria repite este bloque.
+ * Pesos de un paso clave según la mano, el tipo de seña y la máscara de canales activos.
+ * Si un canal flex está marcado como inactivo o con rango insuficiente en la calibración,
+ * se le asigna peso 0 para compensar el hardware por software.
  */
-const weightCache = new Map()
-
-export function weightView(handMode = 'both', type = 'static') {
+export function weightView(handMode = 'both', type = 'static', activeMask = null) {
   const mode = normalizeHandMode(handMode)
   const kind = normalizeGestureType(type)
-  const key = `${kind}:${mode}`
-  const cached = weightCache.get(key)
-  if (cached) return cached
+  const perStep = [...FRAME_WEIGHTS[kind]]
 
-  const perStep = FRAME_WEIGHTS[kind]
+  // Si hay máscara de canales flex (10 booleanos: 0..4 derecha, 5..9 izquierda)
+  if (Array.isArray(activeMask)) {
+    // Guante derecho (flex: índices globales 0..4)
+    for (let i = 0; i < 5; i++) {
+      if (activeMask[i] === false) {
+        perStep[i] = 0
+      }
+    }
+    // Guante izquierdo (flex: índices globales 11..15)
+    for (let i = 0; i < 5; i++) {
+      if (activeMask[5 + i] === false) {
+        perStep[11 + i] = 0
+      }
+    }
+  }
+
   const weights = []
   for (const [start, end] of HAND_RANGES[mode]) {
     weights.push(...perStep.slice(start, end))
   }
 
-  weightCache.set(key, weights)
   return weights
 }
 
@@ -184,41 +195,42 @@ export function euclideanDistance(a, b) {
  * la distancia normal, así los umbrales siguen valiendo).
  *
  * En señas estáticas:
- *   · flex 1,4 por dedo: evalúa los 5 dedos individualmente.
+ *   · flex 1,4 por dedo activo: evalúa dedos individuales. Canales muertos reciben peso 0.
  *   · ax, ay, az 1,8: inclinación y orientación de muñeca (pitch y roll).
- *   · penalización por discrepancia aislada: si un dedo flex o la inclinación
- *     discrepa drásticamente (> 40 %), no se enmascara en el promedio global.
+ *   · penalización por discrepancia aislada: si un sensor activo discrepa (> 40 %),
+ *     no se enmascara en el promedio global.
  *
  * En señas dinámicas:
  *   · IMU pesa ×2,5 (giroscopio ×3,2) y los flex ×0,7.
  */
-export function handDistance(a, b, handMode = 'both', type = 'static') {
+export function handDistance(a, b, handMode = 'both', type = 'static', activeMask = null) {
   const viewA = handView(a, handMode)
   const viewB = handView(b, handMode)
   if (viewA.length === 0 || viewB.length === 0) return Infinity
 
-  const weights = weightView(handMode, type)
+  const weights = weightView(handMode, type, activeMask)
   let sum = 0
   let total = 0
   let maxSingleDiff = 0
 
   for (let index = 0; index < viewA.length; index += 1) {
     const weight = weights[index % weights.length]
+    // Ignorar por completo canales inactivos / muertos (peso 0)
+    if (weight <= 0) continue
+
     const diff = Math.abs(viewA[index] - viewB[index])
     sum += weight * diff * diff
     total += weight
 
-    // En señas estáticas, verificar si algún sensor flex individual o eje de inclinación discrepa
-    const dim = index % HAND_SIZE
-    const isInactiveRing = dim === 3 && (viewA[index] === 0 || viewB[index] === 0)
-    if (!isInactiveRing && diff > maxSingleDiff) {
+    // En señas estáticas, verificar si algún sensor activo discrepa
+    if (diff > maxSingleDiff) {
       maxSingleDiff = diff
     }
   }
 
   const rms = Math.sqrt(sum / Math.max(total, 1e-9))
 
-  // Penalización si algún sensor flex activo o ángulo de inclinación discrepa fuertemente (> 40 %)
+  // Penalización si algún sensor activo o ángulo de inclinación discrepa fuertemente (> 40 %)
   if (type === 'static' && maxSingleDiff > 40) {
     const excess = maxSingleDiff - 40
     return rms + excess * 0.35
@@ -228,7 +240,7 @@ export function handDistance(a, b, handMode = 'both', type = 'static') {
 }
 
 /** Vecinos más cercanos y confianza ponderada por cercanía y margen de separación. */
-function rank(vector, samples, k, scale, type = 'static') {
+function rank(vector, samples, k, scale, type = 'static', activeMask = null) {
   if (!Array.isArray(vector) || vector.length === 0) return null
   if (!Array.isArray(samples) || samples.length === 0) return null
 
@@ -237,7 +249,7 @@ function rank(vector, samples, k, scale, type = 'static') {
     .map((sample) => ({
       label: sample.label,
       handMode: normalizeHandMode(sample.handMode),
-      distance: handDistance(vector, sample.vector, sample.handMode, type),
+      distance: handDistance(vector, sample.vector, sample.handMode, type, activeMask),
     }))
 
   if (distances.length === 0) return null
@@ -297,10 +309,12 @@ function rank(vector, samples, k, scale, type = 'static') {
  * @param {number[]} vector vector de 22 dimensiones
  * @param {{label: string, vector: number[], handMode?: string, type?: string}[]} samples
  * @param {number} k número de vecinos
+ * @param {number} scale escala de distancia
+ * @param {boolean[]} [activeMask] máscara de canales flex válidos
  */
-export function classify(vector, samples, k = K, scale = STATIC_DISTANCE_SCALE) {
+export function classify(vector, samples, k = K, scale = STATIC_DISTANCE_SCALE, activeMask = null) {
   const statics = (samples ?? []).filter((sample) => normalizeGestureType(sample.type) === 'static')
-  return rank(vector, statics, k, scale, 'static')
+  return rank(vector, statics, k, scale, 'static', activeMask)
 }
 
 /**
@@ -309,10 +323,12 @@ export function classify(vector, samples, k = K, scale = STATIC_DISTANCE_SCALE) 
  * @param {number[]} trajectory vector de 352 dimensiones (16 pasos × 22)
  * @param {{label: string, vector: number[], handMode?: string, type?: string}[]} samples
  * @param {number} k número de vecinos
+ * @param {number} scale escala de distancia
+ * @param {boolean[]} [activeMask] máscara de canales flex válidos
  */
-export function classifyTrajectory(trajectory, samples, k = K, scale = DYNAMIC_DISTANCE_SCALE) {
+export function classifyTrajectory(trajectory, samples, k = K, scale = DYNAMIC_DISTANCE_SCALE, activeMask = null) {
   const dynamics = (samples ?? []).filter((sample) => sample.type === 'dynamic')
-  return rank(trajectory, dynamics, k, scale, 'dynamic')
+  return rank(trajectory, dynamics, k, scale, 'dynamic', activeMask)
 }
 
 /** Convierte el entrenamiento guardado en la lista plana de muestras. */

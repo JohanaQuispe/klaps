@@ -37,6 +37,7 @@ import {
   GESTURE_TYPE_LABELS,
   HAND_MODE_LABELS,
   flattenSamples,
+  handDistance,
   summarizeSigns,
 } from '../../services/gesture/knnClassifier.js'
 import { trajectoryFromFrames } from '../../services/gesture/trajectory.js'
@@ -47,7 +48,6 @@ import {
   exportTraining,
   importTraining,
   loadTraining,
-  samplesForType,
   saveTraining,
   totalSamples,
   withSamples,
@@ -100,6 +100,8 @@ export default function Training() {
   const [handMode, setHandMode] = useState('both')
   const [gestureType, setGestureType] = useState('static')
   const [capturing, setCapturing] = useState(false)
+  const [currentTake, setCurrentTake] = useState(0)
+  const [takeNotice, setTakeNotice] = useState('')
   const [captureProgress, setCaptureProgress] = useState(0)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -117,7 +119,6 @@ export default function Training() {
   const summary = summarizeSigns(signs)
   const calibrationSummary = useMemo(() => describeCalibration(calibration), [calibration])
   const connected = gloves.filter((glove) => glove.status === 'conectado').length
-  const total = samplesForType(gestureType)
 
   // Solo se comparan las señas cuyos guantes están enviando datos.
   const availableHands = useMemo(
@@ -184,40 +185,91 @@ export default function Training() {
     setCapturing(true)
     setCaptureProgress(0)
 
-    const captured = []
-    for (let index = 0; index < total; index += 1) {
-      captured.push({ vector: vectorRef.current, at: Date.now() })
-      setCaptureProgress(index + 1)
-      await wait(SAMPLE_INTERVAL_MS)
-    }
+    const TOTAL_TAKES = 3
+    const framesPerTake = gestureType === 'dynamic' ? 60 : 25
+    const allTakes = []
 
-    let stored = captured
-
-    if (gestureType === 'dynamic') {
-      const trajectory = trajectoryFromFrames(captured.map((sample) => sample.vector))
-
-      if (!trajectory) {
-        setCapturing(false)
+    try {
+      for (let take = 1; take <= TOTAL_TAKES; take += 1) {
+        setCurrentTake(take)
         setCaptureProgress(0)
-        setError(
-          'No se detectó movimiento en la captura. Repite el gesto completo dentro de los 4 segundos de la ventana.',
-        )
-        return
+
+        if (take > 1) {
+          setTakeNotice(`¡Toma ${take - 1} de ${TOTAL_TAKES} lista! Relaja brevemente la mano...`)
+          await wait(1200)
+        }
+
+        setTakeNotice(`Grabando Toma ${take} de ${TOTAL_TAKES}: Mantén firme la postura...`)
+
+        const takeFrames = []
+        for (let frame = 0; frame < framesPerTake; frame += 1) {
+          takeFrames.push({ vector: vectorRef.current, at: Date.now() })
+          setCaptureProgress(frame + 1)
+          await wait(SAMPLE_INTERVAL_MS)
+        }
+
+        allTakes.push(takeFrames)
       }
 
-      stored = [{ vector: trajectory, at: Date.now() }]
-    }
+      let stored = []
 
-    const next = saveTraining(withSamples(training, name, stored, { handMode, gestureType }))
-    setTraining(next)
-    setCapturing(false)
-    setCaptureProgress(0)
-    setLabel('')
-    setMessage(
-      gestureType === 'dynamic'
-        ? `«${name}» guardada como dinámica: 1 recorrido de ${captured.length} fotogramas resumido en ${DYNAMIC_STEPS} pasos. Repite la captura para sumar repeticiones y mejorar el acierto.`
-        : `«${name}» guardada: ${stored.length} muestras de ${HAND_MODE_LABELS[handMode].toLowerCase()}.`,
-    )
+      if (gestureType === 'dynamic') {
+        for (let t = 0; t < allTakes.length; t += 1) {
+          const trajectory = trajectoryFromFrames(allTakes[t].map((s) => s.vector))
+          if (trajectory) {
+            stored.push({ vector: trajectory, at: Date.now() })
+          }
+        }
+        if (stored.length === 0) {
+          setError('No se detectó movimiento suficiente en las 3 tomas. Repite el gesto con mayor amplitud.')
+          return
+        }
+      } else {
+        stored = allTakes.flat()
+      }
+
+      // Cálculo del vector promedio y verificación de separación frente a otras señas guardadas
+      const activeMask = calibration?.flex?.valid ?? null
+      const firstVector = stored[0]?.vector ?? []
+      const meanVector = Array.from({ length: firstVector.length }, (_, dim) => {
+        const sum = stored.reduce((acc, sample) => acc + (sample.vector[dim] ?? 0), 0)
+        return sum / Math.max(1, stored.length)
+      })
+
+      let minDistance = Infinity
+      let closestSign = null
+
+      for (const existingSign of training.signs) {
+        if (existingSign.label.toLowerCase() === name.toLowerCase()) continue
+        for (const sample of existingSign.samples ?? []) {
+          if (sample.vector?.length === meanVector.length) {
+            const dist = handDistance(meanVector, sample.vector, handMode, gestureType, activeMask)
+            if (dist < minDistance) {
+              minDistance = dist
+              closestSign = existingSign
+            }
+          }
+        }
+      }
+
+      const next = saveTraining(withSamples(training, name, stored, { handMode, gestureType }))
+      setTraining(next)
+      setLabel('')
+
+      const separationMsg =
+        minDistance < 18 && closestSign
+          ? `⚠️ Advertencia: Separación estrecha (${minDistance.toFixed(1)}) frente a «${closestSign.label}». Procura variar la inclinación de la muñeca para distinguirlas mejor.`
+          : `Margen de separación óptimo (${minDistance === Infinity ? 'primera seña' : `${minDistance.toFixed(1)} puntos`}).`
+
+      setMessage(
+        `«${name}» guardada con éxito (3 tomas consecutivas, ${stored.length} muestras). ${separationMsg}`,
+      )
+    } finally {
+      setCapturing(false)
+      setCurrentTake(0)
+      setCaptureProgress(0)
+      setTakeNotice('')
+    }
   }
 
   const runCalibration = async () => {
@@ -646,19 +698,21 @@ export default function Training() {
             />
           </div>
           <Button icon={capturing ? undefined : Play} onClick={capture} disabled={capturing || !hasReadings}>
-            {capturing ? `Capturando ${captureProgress}/${total}…` : 'Capturar seña'}
+            {capturing ? `Toma ${currentTake || 1} de 3 (${captureProgress}f)…` : 'Capturar seña (3 tomas)'}
           </Button>
         </div>
 
         {capturing && (
-          <ProgressBar
-            className="mt-4"
-            value={(captureProgress / total) * 100}
-            label="Captura"
-            valueLabel={`${captureProgress} de ${total}`}
-            tone="success"
-            size="sm"
-          />
+          <div className="mt-4 space-y-2 rounded-md bg-brand-50 p-3 border border-brand-200">
+            <p className="text-xs font-bold text-brand-800">{takeNotice}</p>
+            <ProgressBar
+              value={(captureProgress / (gestureType === 'dynamic' ? 60 : 25)) * 100}
+              label={`Toma ${currentTake} de 3`}
+              valueLabel={`${captureProgress} de ${gestureType === 'dynamic' ? 60 : 25} fotogramas`}
+              tone="success"
+              size="sm"
+            />
+          </div>
         )}
 
         {message && <p className="mt-3 rounded-md bg-mint px-3 py-2 text-sm text-ink">{message}</p>}
