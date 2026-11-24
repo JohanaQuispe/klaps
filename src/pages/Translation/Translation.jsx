@@ -703,10 +703,10 @@ export default function Translation() {
           {/* Barras porcentuales en vivo de los 4 dedos flex activos */}
           <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
             {[
-              { id: 0, label: 'Pulgar', short: 'Pul', val: activeHandFlex[0] ?? 0 },
-              { id: 1, label: 'Índice', short: 'Índ', val: activeHandFlex[1] ?? 0 },
-              { id: 2, label: 'Medio', short: 'Med', val: activeHandFlex[2] ?? 0 },
-              { id: 4, label: 'Meñique', short: 'Meñ', val: activeHandFlex[4] ?? 0 },
+              { id: 0, label: 'Pulgar', short: 'Pul', val: activeHandFlex[0] ?? 0, raw: activeReading?.rawFlex?.[0] ?? 0 },
+              { id: 1, label: 'Índice', short: 'Índ', val: activeHandFlex[1] ?? 0, raw: activeReading?.rawFlex?.[1] ?? 0 },
+              { id: 2, label: 'Medio', short: 'Med', val: activeHandFlex[2] ?? 0, raw: activeReading?.rawFlex?.[2] ?? 0 },
+              { id: 4, label: 'Meñique', short: 'Meñ', val: activeHandFlex[4] ?? 0, raw: activeReading?.rawFlex?.[4] ?? 0 },
             ].map((finger) => (
               <div
                 key={finger.id}
@@ -717,7 +717,12 @@ export default function Translation() {
                     <span>{finger.short}</span>
                     <span className="text-[0.65rem] font-normal text-ink-soft">({finger.label})</span>
                   </span>
-                  <span className="font-mono text-brand-800">{Math.round(finger.val)}%</span>
+                  <div className="text-right">
+                    <span className="font-mono text-brand-800">{Math.round(finger.val)}%</span>
+                    <span className="block text-[0.65rem] font-mono font-normal text-ink-soft">
+                      raw: {finger.raw}
+                    </span>
+                  </div>
                 </div>
                 <ProgressBar
                   className="mt-1.5"

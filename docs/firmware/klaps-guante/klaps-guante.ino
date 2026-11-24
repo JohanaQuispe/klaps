@@ -77,15 +77,15 @@ const char* FLEX_NAMES[5] = { "Pulgar", "Índice", "Medio", "Anular", "Meñique"
 // 4. CALIBRACIÓN DE LOS SENSORES DE FLEXIÓN
 // ==============================================================================
 // El circuito es un divisor: 3.3V -> Flex -> Pin -> 47 kΩ -> GND
-// - Dedo recto (R_flex baja ~25 kΩ)  -> Tensión alta en el pin (ADC mayor ~2200-2800)
-// - Dedo doblado (R_flex alta ~80 kΩ) -> Tensión baja en el pin (ADC menor ~900-1500)
+// - Dedo recto (R_flex baja): Tensión más alta en el pin (ADC típico ~1000 - 1050 cuentas)
+// - Dedo doblado (R_flex alta): Tensión más baja en el pin (ADC típico ~750 - 950 cuentas)
 //
 // Al doblar, la lectura ADC disminuye. El firmware mapea inversamente:
 // ADC_STRAIGHT -> 0 %
 // ADC_BENT     -> 100 %
-// Puedes afinar estos extremos según las tolerancias físicas de tus sensores:
-const int ADC_STRAIGHT[5] = { 2600, 2600, 2600, 2600, 2600 }; // Dedo recto (0 %)
-const int ADC_BENT[5]     = { 1200, 1200, 1200, 1200, 1200 }; // Dedo doblado (100 %)
+// Valores ajustados a las mediciones reales del hardware KLAPS (divisor 47 kΩ + ADC_11db):
+const int ADC_STRAIGHT[5] = { 1030, 1034, 1030, 0, 850 }; // Dedo recto (0 %)
+const int ADC_BENT[5]     = {  900,  959,  895, 0, 752 }; // Dedo doblado (100 %)
 
 // Umbral mínimo de tensión para detectar si el sensor está físicamente conectado
 const int ADC_DISCONNECTED_THRESHOLD = 25; // Si marca <= 25 cuentas, pin a GND o roto
@@ -249,6 +249,11 @@ int16_t readFlex(int index) {
   // - raw cercano a ADC_BENT     -> 100 % (dedo doblado)
   const int straight = ADC_STRAIGHT[index];
   const int bent = ADC_BENT[index];
+
+  // Si no hay rango válido calibrado (ej. anular desconectado), retornar 0
+  if (abs(straight - bent) < 15) {
+    return 0;
+  }
 
   int percent = map(raw, straight, bent, 0, 100);
   return (int16_t)constrain(percent, 0, 100);
