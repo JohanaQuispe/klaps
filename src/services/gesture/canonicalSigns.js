@@ -168,6 +168,66 @@ export const CANONICAL_SIGNS = [
   },
 ]
 
+export const CANONICAL_VOWELS = [
+  {
+    label: 'A',
+    handMode: 'right',
+    gestureType: 'static',
+    description: 'Vocal A: Puño cerrado con pulgar lateral apoyado contra el índice doblado',
+    samples: [
+      { vector: buildStaticVector([30, 92, 90, 0, 92]), at: now },
+      { vector: buildStaticVector([28, 90, 88, 0, 90]), at: now + 50 },
+      { vector: buildStaticVector([32, 94, 92, 0, 94]), at: now + 100 },
+    ],
+  },
+  {
+    label: 'E',
+    handMode: 'right',
+    gestureType: 'static',
+    description: 'Vocal E: Dedos curvados en garra sobre la palma apoyados en el pulgar',
+    samples: [
+      { vector: buildStaticVector([55, 65, 65, 0, 65]), at: now },
+      { vector: buildStaticVector([58, 68, 67, 0, 68]), at: now + 50 },
+      { vector: buildStaticVector([52, 62, 63, 0, 62]), at: now + 100 },
+    ],
+  },
+  {
+    label: 'I',
+    handMode: 'right',
+    gestureType: 'static',
+    description: 'Vocal I: Puño cerrado con solo el dedo meñique levantado y recto',
+    samples: [
+      { vector: buildStaticVector([88, 90, 90, 0, 8]), at: now },
+      { vector: buildStaticVector([86, 92, 92, 0, 10]), at: now + 50 },
+      { vector: buildStaticVector([90, 88, 88, 0, 7]), at: now + 100 },
+    ],
+  },
+  {
+    label: 'O',
+    handMode: 'right',
+    gestureType: 'static',
+    description: 'Vocal O: Todos los dedos curvados formando un círculo cerrado con el pulgar',
+    samples: [
+      { vector: buildStaticVector([48, 52, 50, 0, 52]), at: now },
+      { vector: buildStaticVector([50, 54, 52, 0, 54]), at: now + 50 },
+      { vector: buildStaticVector([46, 50, 48, 0, 50]), at: now + 100 },
+    ],
+  },
+  {
+    label: 'U',
+    handMode: 'right',
+    gestureType: 'static',
+    description: 'Vocal U: Dedo índice y medio erguidos juntos, pulgar y meñique doblados',
+    samples: [
+      { vector: buildStaticVector([88, 8, 8, 0, 88]), at: now },
+      { vector: buildStaticVector([86, 10, 10, 0, 86]), at: now + 50 },
+      { vector: buildStaticVector([90, 7, 7, 0, 90]), at: now + 100 },
+    ],
+  },
+]
+
+export const ALL_CANONICAL = [...CANONICAL_SIGNS, ...CANONICAL_VOWELS]
+
 /**
  * Guarda las señas canónicas maestras de forma permanente en localStorage («guardar para siempre»).
  * Si ya existen señas grabadas por el usuario, se combinan sin sobreescribir las personalizadas.
@@ -178,7 +238,7 @@ export const CANONICAL_SIGNS = [
 export function saveCanonicalSigns(currentTraining) {
   let merged = currentTraining || { version: 2, signs: [] }
 
-  for (const canonical of CANONICAL_SIGNS) {
+  for (const canonical of ALL_CANONICAL) {
     merged = withSamples(merged, canonical.label, canonical.samples, {
       handMode: canonical.handMode,
       gestureType: canonical.gestureType,
@@ -189,15 +249,31 @@ export function saveCanonicalSigns(currentTraining) {
 }
 
 /**
- * Restablece el almacén de señas a EXCLUSIVAMENTE las señas maestras oficiales,
- * eliminando señas antiguas de prueba, letras aisladas (como 'A') o registros corruptos.
+ * Guarda exclusivamente las 5 vocales canónicas (A, E, I, O, U) en localStorage.
+ */
+export function saveCanonicalVowels(currentTraining) {
+  let merged = currentTraining || { version: 2, signs: [] }
+
+  for (const vowel of CANONICAL_VOWELS) {
+    merged = withSamples(merged, vowel.label, vowel.samples, {
+      handMode: vowel.handMode,
+      gestureType: vowel.gestureType,
+    })
+  }
+
+  return saveTraining(merged)
+}
+
+/**
+ * Restablece el almacén de señas a las señas maestras y vocales oficiales,
+ * eliminando registros corruptos o pruebas desactualizadas.
  *
- * @returns {object} estado de entrenamiento con las 6 señas canónicas
+ * @returns {object} estado de entrenamiento con las señas canónicas y vocales
  */
 export function resetToCanonicalSigns() {
   const training = {
     version: 2,
-    signs: CANONICAL_SIGNS.map((sign, index) => ({
+    signs: ALL_CANONICAL.map((sign, index) => ({
       id: `canonical-${index}-${sign.label.toLowerCase()}`,
       label: sign.label,
       handMode: sign.handMode,
