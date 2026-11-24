@@ -13,6 +13,13 @@
  * calibrar se conservan en `rawFlex` / `rawImu` para diagnóstico.
  */
 
+import {
+  DEFAULT_CALIBRATION,
+  DEFAULT_CLOSED_RAW,
+  DEFAULT_OPEN_RAW,
+  DEFAULT_VALID,
+} from './calibration.js'
+
 export const FRAME_LENGTH = 34
 
 /** Rangos de normalización, para que el IMU pese igual que los flex (0-100). */
@@ -22,9 +29,29 @@ export const GYRO_RANGE = 10 // ±10 rad/s
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
 /**
+ * Convierte un valor crudo ADC de un sensor flex en porcentaje de flexión (0-100%).
+ * Fórmula oficial: clamp((openRaw - raw) / (openRaw - closedRaw), 0, 1) * 100
+ *
+ * Al cerrar el puño, los valores crudos del ADC disminuyen (openRaw > closedRaw),
+ * por lo que (openRaw - raw) crece de 0 a (openRaw - closedRaw) y genera 0% a 100%.
+ *
+ * Si el sensor está desconectado (raw === 0), devuelve 0%.
+ */
+export function calculateFlexPercentage(raw, openRaw, closedRaw) {
+  if (!Number.isFinite(raw) || raw === 0) return 0
+  if (!Number.isFinite(openRaw) || !Number.isFinite(closedRaw)) return 0
+
+  const span = openRaw - closedRaw
+  if (Math.abs(span) < 12) return 0
+
+  const ratio = (openRaw - raw) / span
+  return clamp(ratio, 0, 1) * 100
+}
+
+/**
  * Convierte un paquete BLE en una lectura.
  * @param {DataView|ArrayBuffer|Uint8Array|null} payload
- * @returns {{flex: number[], imu: {ax:number, ay:number, az:number, gx:number, gy:number, gz:number}, at: number}|null}
+ * @returns {{flex: number[], rawFlex: number[], imu: {ax:number, ay:number, az:number, gx:number, gy:number, gz:number}, at: number}|null}
  */
 export function parseFrame(payload, at = Date.now()) {
   if (!payload) return null
@@ -38,9 +65,10 @@ export function parseFrame(payload, at = Date.now()) {
 
   if (view.byteLength < FRAME_LENGTH) return null
 
-  const flex = []
+  // Lectura del valor ADC int16 directo sin recortar artificialmente a 100
+  const rawFlex = []
   for (let index = 0; index < 5; index += 1) {
-    flex.push(clamp(view.getInt16(index * 2, true), 0, 100))
+    rawFlex.push(view.getInt16(index * 2, true))
   }
 
   const imu = {}
@@ -50,39 +78,46 @@ export function parseFrame(payload, at = Date.now()) {
     imu[name] = Number.isFinite(value) ? value : 0
   })
 
-  return { flex, imu, at, bytes: view.byteLength }
+  return { flex: rawFlex, rawFlex, imu, at, bytes: view.byteLength }
 }
 
 /**
  * Aplica la calibración guardada a una lectura de un guante.
  *
- * · Flex: `(valor − min) / (max − min) × 100`, recortado a 0-100. Si un dedo no
- *   se pudo calibrar (`valid[index] === false`) se deja como venga.
+ * · Flex: calcula el porcentaje de flexión exacto mediante Min-Max
+ *   con valores invertidos del ADC:
+ *   flex % = clamp((openRaw - raw) / (openRaw - closedRaw), 0, 1) * 100
+ *   Canales con raw === 0 (como el Anular desconectado) quedan en 0%.
  * · IMU: se resta la línea base del paso «neutro», tanto en aceleración como en
  *   giroscopio. El valor original queda en `rawImu` porque la regla del estado
  *   «0» (palma hacia abajo) es física y trabaja sobre la aceleración absoluta.
  *
- * @param {{flex: number[], imu: object, at: number}|null} reading
+ * @param {{flex: number[], rawFlex?: number[], imu: object, at: number}|null} reading
  * @param {object|null} calibration contenido de `klaps.calibration.v1`
  * @param {'derecho'|'izquierdo'} side guante del que viene la lectura
  */
 export function applyCalibration(reading, calibration, side = 'derecho') {
-  if (!reading?.flex || !reading?.imu) return reading
-  if (!calibration?.flex?.min || !calibration?.flex?.max) return reading
+  if (!reading) return null
 
+  const activeCal = calibration ?? DEFAULT_CALIBRATION
+  const rawList = reading.rawFlex ?? reading.flex ?? []
   const base = side === 'izquierdo' ? 5 : 0
-  const flex = reading.flex.map((value, index) => {
-    const position = base + index
-    const low = calibration.flex.min[position]
-    const high = calibration.flex.max[position]
-    const usable = calibration.flex.valid?.[position] ?? false
-    const span = high - low
 
-    if (!usable || !(span > 0)) return value
-    return clamp(((value - low) / span) * 100, 0, 100)
+  const flex = rawList.map((rawVal, index) => {
+    const position = base + index
+    // Ignorar si raw === 0 (ej. Anular desconectado)
+    if (rawVal === 0) return 0
+
+    const openRaw = activeCal?.flex?.openRaw?.[position] ?? DEFAULT_OPEN_RAW[position]
+    const closedRaw = activeCal?.flex?.closedRaw?.[position] ?? DEFAULT_CLOSED_RAW[position]
+    const isValid = activeCal?.flex?.valid?.[position] ?? DEFAULT_VALID[position]
+
+    if (!isValid) return 0
+
+    return calculateFlexPercentage(rawVal, openRaw, closedRaw)
   })
 
-  const offset = calibration.imu?.[side]
+  const offset = activeCal?.imu?.[side]
   const imu = offset
     ? {
         ax: reading.imu.ax - (offset.ax ?? 0),
@@ -98,9 +133,9 @@ export function applyCalibration(reading, calibration, side = 'derecho') {
     ...reading,
     flex,
     imu,
-    rawFlex: reading.flex,
-    rawImu: reading.imu,
-    calibrated: Boolean(offset) || flex.some((value, index) => value !== reading.flex[index]),
+    rawFlex: rawList,
+    rawImu: reading.rawImu ?? reading.imu,
+    calibrated: true,
   }
 }
 
@@ -175,7 +210,7 @@ export function describeFrameContent(frame, byteLength = 0) {
  * Si un dedo tiene el sensor dañado o desconectado (marca ≤ 5 %), no bloquea
  * la detección del puño, evaluando los demás dedos activos (mínimo 2).
  */
-export const REST_FLEX_THRESHOLD = 75
+export const REST_FLEX_THRESHOLD = 65
 export const REST_ACCEL_THRESHOLD = -7.5
 export const REST_FINGERS = 4
 
@@ -184,11 +219,15 @@ export function isRestHand(reading) {
   if (!reading?.flex || !reading?.imu) return false
 
   const allFingers = reading.flex.slice(0, 5)
-  // Dedos activos que registran señal por encima del umbral de desconexión (> 5 %)
-  const activeFingers = allFingers.filter((val) => Number.isFinite(val) && val > 5)
+  // Dedos activos que registran señal por encima del umbral de desconexión (> 5 %) y raw !== 0
+  const activeFingers = allFingers.filter((val, idx) => {
+    const raw = reading.rawFlex?.[idx]
+    if (raw === 0) return false
+    return Number.isFinite(val) && val > 5
+  })
 
-  // Si hay al menos 2 dedos activos (ej. pulgar, índice, medio), todos los activos deben estar cerrados.
-  // Si no hay suficientes dedos activos, se aplica la regla estándar sobre los dedos disponibles.
+  // Si hay al menos 2 dedos activos (ej. pulgar, índice, medio, meñique),
+  // todos los activos deben estar cerrados (flex >= 65 %)
   const closed =
     activeFingers.length >= 2
       ? activeFingers.every((value) => value >= REST_FLEX_THRESHOLD)

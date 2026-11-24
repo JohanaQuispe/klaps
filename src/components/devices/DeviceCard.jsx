@@ -39,6 +39,7 @@ export default function DeviceCard({
   onDisconnect,
   onRequestConnect,
   onSubscribe,
+  onCalibrate,
   sensorsConfigured = false,
 }) {
   const battery = batteryState(glove.battery)
@@ -108,7 +109,7 @@ export default function DeviceCard({
             {glove.sensorsListening && glove.frames > 0 && !glove.frameIssue && (
               <div className="mt-2 space-y-1.5 border-t border-brand-100 pt-2">
                 <div className="flex items-center justify-between text-[0.7rem] font-semibold text-brand-800">
-                  <span>Flexión en vivo</span>
+                  <span>Flexión calibrada en vivo</span>
                   <span className="font-normal text-success">34 bytes · 20 Hz</span>
                 </div>
                 <div className="grid grid-cols-5 gap-1.5 text-center text-[0.68rem]">
@@ -120,22 +121,33 @@ export default function DeviceCard({
                     { label: 'Meñ', title: 'Meñique (GPIO 32)' },
                   ].map((finger, i) => {
                     const val = Math.round(glove.reading?.flex?.[i] ?? 0)
-                    const isInactiveRing = i === 3 && val === 0
+                    const rawVal = glove.reading?.rawFlex?.[i]
+                    const isAnular = i === 3
+                    const isInactive = isAnular || rawVal === 0
+
                     return (
                       <div
                         key={i}
-                        title={finger.title}
+                        title={`${finger.title} · raw ADC: ${rawVal ?? '—'} · peso: ${isInactive ? 0 : 1.4}`}
                         className={cn(
-                          'rounded p-1 transition-colors',
-                          isInactiveRing ? 'bg-brand-50/60 text-ink-soft' : 'bg-brand-50 text-ink',
+                          'rounded p-1 transition-colors border',
+                          isInactive
+                            ? 'bg-neutral-50 border-neutral-200 text-ink-soft opacity-70'
+                            : 'bg-brand-50 border-brand-200 text-brand-900',
                         )}
                       >
                         <span className="block text-[0.62rem] text-ink-soft">{finger.label}</span>
-                        <span className="font-bold">{val}%</span>
+                        <span className="font-bold text-xs">{isInactive ? '0%' : `${val}%`}</span>
+                        <span className="block text-[0.58rem] font-mono text-ink-soft truncate">
+                          {isInactive ? 'peso 0' : `raw ${rawVal ?? '—'}`}
+                        </span>
                       </div>
                     )
                   })}
                 </div>
+                <p className="text-[0.65rem] text-brand-700 font-medium">
+                  ✓ 4 dedos activos (peso 1.4) · Anular ignorado (raw 0 · peso 0)
+                </p>
                 {glove.reading?.imu && (
                   <p className="font-mono text-[0.65rem] text-ink-soft">
                     az: {glove.reading.imu.az.toFixed(1)} m/s² · gx: {glove.reading.imu.gx.toFixed(1)} rad/s
@@ -187,6 +199,16 @@ export default function DeviceCard({
         {isConnected && !glove.sensorsListening && sensorsConfigured && (
           <Button size="sm" variant="secondary" icon={Activity} onClick={() => onSubscribe?.(glove.id)}>
             Activar sensores
+          </Button>
+        )}
+        {isConnected && (
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={SlidersHorizontal}
+            onClick={() => onCalibrate?.(glove)}
+          >
+            Calibrar mano abierta / puño cerrado
           </Button>
         )}
         <Button

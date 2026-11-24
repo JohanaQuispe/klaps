@@ -37,6 +37,7 @@ import { useGestureRecognition } from '../../hooks/useGestureRecognition.js'
 import { useHelpSignal } from '../../hooks/useHelpSignal.js'
 import { CONFIDENCE_THRESHOLD } from '../../services/gesture/knnClassifier.js'
 import {
+  DEFAULT_CALIBRATION,
   buildQuickCalibration,
   describeCalibration,
   QUICK_CALIBRATION_STEPS,
@@ -276,8 +277,9 @@ export default function Translation() {
     enabled: listening,
     availableHands,
     threshold: CONFIDENCE_THRESHOLD,
-    holdMs: currentSpeed.holdMs,
+    holdMs: 1400,
     cooldownMs: currentSpeed.cooldownMs,
+    flexOnly: translationMode === 'words',
     onRecognize: handleRecognize,
   })
 
@@ -353,12 +355,10 @@ export default function Translation() {
       }
 
       const flex = activeReading.flex
-      // Canales activos flexionados fuertemente en puño cerrado
-      const validFlex = flex.filter((v) => Number.isFinite(v) && v > 5)
-      const isFistClosed =
-        validFlex.length >= 2
-          ? validFlex.every((v) => v >= 58)
-          : flex.slice(0, 4).every((v) => v >= 58)
+      // Puño cerrado: los 4 dedos activos (pulgar, índice, medio, meñique) con flexión >= 60%
+      // El anular (flex[3]) tiene raw === 0 y flex === 0, por lo que se ignora
+      const activeFingers = [flex[0], flex[1], flex[2], flex[4]]
+      const isFistClosed = activeFingers.every((v) => Number.isFinite(v) && v >= 60)
 
       // Agitación sostenida del MPU6050
       const imu = activeReading.rawImu ?? activeReading.imu
@@ -489,7 +489,7 @@ export default function Translation() {
                 setQuickResult(describeCalibration(calibration))
               }}
             >
-              Auto-calibrar (2 pasos)
+              Calibrar mano abierta / puño cerrado
             </Button>
           </div>
         }
@@ -1058,27 +1058,41 @@ export default function Translation() {
         )}
       </Modal>
 
-      {/* Modal del Asistente de Calibración Rápida de 2 pasos */}
+      {/* Modal del Asistente de Calibración Rápida Min-Max */}
       <Modal
         open={quickModalOpen}
         onClose={() => setQuickModalOpen(false)}
-        title="Asistente de auto-calibración rápida (2 pasos)"
-        description="Detecta los canales flex activos y anula canales dañados o sin respuesta asignando peso 0, apoyándose en el giroscopio MPU6050."
+        title="Calibrar mano abierta / puño cerrado"
+        description="Mide los valores crudos del ADC (openRaw y closedRaw) para calcular el 0% al abrir la mano y 100% al cerrar el puño. El anular desconectado (raw 0) se ignora con peso 0."
         footer={
-          <div className="flex w-full justify-end gap-2">
+          <div className="flex w-full flex-wrap justify-between gap-2">
             <Button
-              variant="secondary"
-              onClick={() => setQuickModalOpen(false)}
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                applyCalibrationSettings(DEFAULT_CALIBRATION)
+                setQuickResult(describeCalibration(DEFAULT_CALIBRATION))
+                setQuickNotice('Valores medidos de fábrica del ESP32-D restablecidos con éxito.')
+              }}
               disabled={calibratingQuick}
             >
-              Cerrar
+              Restablecer valores medidos
             </Button>
-            <Button
-              onClick={runQuickCalibration}
-              disabled={calibratingQuick || !hasReadings}
-            >
-              {calibratingQuick ? 'Calibrando…' : 'Iniciar calibración (4 seg)'}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => setQuickModalOpen(false)}
+                disabled={calibratingQuick}
+              >
+                Cerrar
+              </Button>
+              <Button
+                onClick={runQuickCalibration}
+                disabled={calibratingQuick || !hasReadings}
+              >
+                {calibratingQuick ? 'Calibrando…' : 'Iniciar calibración (4 seg)'}
+              </Button>
+            </div>
           </div>
         }
       >
