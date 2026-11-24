@@ -89,13 +89,13 @@ export default function Sidebar({ onOpenAccessibility }) {
         <div className="rounded-md bg-brand-50 p-3.5">
           <StatusBadge
             status={connected > 0 ? 'conectado' : 'desconectado'}
-            label={`${connected} de ${gloves.length} guantes`}
+            label={connected > 0 ? (connected === 1 ? '1 guante conectado' : `${connected} guantes`) : 'Desconectado'}
             size="sm"
           />
           <p className="mt-2 text-xs leading-relaxed text-ink-soft">
             {connected > 0
-              ? 'Conexión real por Bluetooth LE. Los datos que ves vienen de tus guantes.'
-              : 'Aún no hay guantes conectados. Ve a Dispositivos para vincularlos por Bluetooth LE.'}
+              ? 'Conexión real por Bluetooth LE. Los datos que ves vienen de tu guante KLAPS.'
+              : 'Aún no hay guantes conectados. Ve a Dispositivos para vincular tu guante por Bluetooth LE.'}
           </p>
           <p className="mt-2 text-[0.7rem] font-semibold tracking-wide text-ink-soft">
             {APP_BUILD_LABEL}

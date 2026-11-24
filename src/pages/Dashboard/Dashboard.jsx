@@ -58,8 +58,9 @@ export default function Dashboard() {
               Hola, ¿qué necesitas comunicar hoy?
             </h1>
             <p className="mt-2 max-w-prose text-sm text-ink-soft sm:text-base">
-              Tienes {connected} de {gloves.length} guantes conectados por Bluetooth LE.
-              {connected === 0 && ' Conéctalos desde Dispositivos para empezar a recibir datos.'}
+              {connected > 0
+                ? (connected === 1 ? 'Tu guante KLAPS está conectado por Bluetooth LE y listo para traducir.' : `Tienes ${connected} guantes conectados por Bluetooth LE.`)
+                : 'Conecta tu guante desde Dispositivos para empezar a recibir datos por Bluetooth LE.'}
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <StatusBadge

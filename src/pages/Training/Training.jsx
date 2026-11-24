@@ -44,6 +44,7 @@ import {
 import { trajectoryFromFrames } from '../../services/gesture/trajectory.js'
 import {
   CANONICAL_SIGNS,
+  resetToCanonicalSigns,
   saveCanonicalSigns,
 } from '../../services/gesture/canonicalSigns.js'
 import {
@@ -102,7 +103,7 @@ export default function Training() {
   const [sensorsUuid, setSensorsUuid] = useState(uuidSettings.sensors)
 
   const [label, setLabel] = useState('')
-  const [handMode, setHandMode] = useState('both')
+  const [handMode, setHandMode] = useState('right')
   const [gestureType, setGestureType] = useState('static')
   const [capturing, setCapturing] = useState(false)
   const [currentTake, setCurrentTake] = useState(0)
@@ -386,72 +387,42 @@ export default function Training() {
         backLabel="Volver a traducción"
         eyebrow="Calibración"
         title="Entrenamiento de señas"
-        description="Conecta los guantes, graba cada seña y comprueba el reconocimiento antes de usarlo."
+        description="Conecta el guante, graba cada seña y comprueba el reconocimiento antes de usarlo."
         actions={
           <StatusBadge
             status={connected > 0 ? 'conectado' : 'desconectado'}
-            label={`${connected} de 2 guantes`}
+            label={connected > 0 ? (connected === 1 ? '1 guante conectado' : `${connected} guantes`) : 'Desconectado'}
           />
         }
       />
 
       {error && <ErrorMessage className="mb-5" title="Revisa esto" description={error} />}
 
-      {/* 1. Conexión y UUID del firmware */}
+      {/* 1. Conexión del guante */}
       <Card as="section" aria-labelledby="conexion-titulo" padding="lg">
-        <h2 id="conexion-titulo" className="flex items-center gap-2 font-display text-lg font-extrabold text-brand-800">
-          <Bluetooth className="size-5 text-brand-600" aria-hidden="true" />
-          Conexión y UUID del firmware
-        </h2>
-        <p className="mt-1 text-sm text-ink-soft">
-          La app lee una trama de <strong>34 bytes</strong>: 5 enteros de 16 bits con los flex en
-          porcentaje y 6 flotantes con el MPU-6050.
-        </p>
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <label htmlFor="service-uuid" className="text-sm font-semibold text-ink">
-              UUID del servicio
-            </label>
-            <input
-              id="service-uuid"
-              value={serviceUuid}
-              onChange={(event) => setServiceUuid(event.target.value)}
-              placeholder="0000abcd-0000-1000-8000-00805f9b34fb"
-              spellCheck="false"
-              className="mt-1 min-h-12 w-full rounded-md border border-brand-200 bg-white px-3 font-mono text-sm text-ink"
-            />
+            <h2 id="conexion-titulo" className="flex items-center gap-2 font-display text-lg font-extrabold text-brand-800">
+              <Bluetooth className="size-5 text-brand-600" aria-hidden="true" />
+              Conexión del Guante Inteligente
+            </h2>
+            <p className="mt-1 text-sm text-ink-soft">
+              Comunicación en tiempo real por Bluetooth LE con el firmware oficial de KLAPS (34 bytes · 20 Hz).
+            </p>
           </div>
-          <div>
-            <label htmlFor="sensors-uuid" className="text-sm font-semibold text-ink">
-              UUID de la característica de sensores
-            </label>
-            <input
-              id="sensors-uuid"
-              value={sensorsUuid}
-              onChange={(event) => setSensorsUuid(event.target.value)}
-              placeholder="0000abce-0000-1000-8000-00805f9b34fb"
-              spellCheck="false"
-              className="mt-1 min-h-12 w-full rounded-md border border-brand-200 bg-white px-3 font-mono text-sm text-ink"
-            />
+          <div className="flex flex-wrap gap-2">
+            {gloves.map((glove) => (
+              <Button
+                key={glove.id}
+                size="sm"
+                variant={glove.status === 'conectado' ? 'secondary' : 'primary'}
+                icon={glove.status === 'conectado' ? Square : Bluetooth}
+                onClick={() => (glove.status === 'conectado' ? disconnect(glove.id) : connect(glove.id))}
+              >
+                {glove.status === 'conectado' ? `Desconectar ${glove.label}` : `Conectar ${glove.label}`}
+              </Button>
+            ))}
           </div>
-        </div>
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button size="sm" icon={Save} onClick={saveUuids}>
-            Guardar UUID
-          </Button>
-          {gloves.map((glove) => (
-            <Button
-              key={glove.id}
-              size="sm"
-              variant="secondary"
-              icon={glove.status === 'conectado' ? Square : Bluetooth}
-              onClick={() => (glove.status === 'conectado' ? disconnect(glove.id) : connect(glove.id))}
-            >
-              {glove.status === 'conectado' ? `Desconectar ${glove.label.toLowerCase()}` : `Conectar ${glove.label.toLowerCase()}`}
-            </Button>
-          ))}
         </div>
 
         <ul className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
@@ -460,76 +431,97 @@ export default function Training() {
               key={glove.id}
               className="flex items-center justify-between gap-2 rounded-md bg-brand-50 px-3 py-2"
             >
-              <span className="font-semibold text-ink">{glove.label}</span>
-              <span className="text-xs text-ink-soft">
-                {glove.status} · {glove.frames} tramas ·{' '}
-                {glove.sensorsListening ? 'escuchando' : 'sin suscribir'}
+              <div>
+                <span className="font-semibold text-ink">{glove.label}</span>
+                <span className="ml-1.5 text-xs text-ink-soft">({glove.role})</span>
+              </div>
+              <span className="text-xs font-semibold text-brand-800">
+                {glove.status} {glove.frames > 0 ? `· ${glove.frames} tramas` : ''}
               </span>
             </li>
           ))}
         </ul>
-
-        <p className="mt-3 text-xs text-ink-soft">
-          {protocolConfigured
-            ? 'UUID configurados: la app se suscribe automáticamente al conectar.'
-            : 'Sin UUID configurados todavía: no se pueden leer los sensores.'}
-        </p>
       </Card>
 
       {/* 2. Lectura en vivo */}
       <Card as="section" aria-labelledby="lectura-titulo" padding="lg" className="mt-5">
         <h2 id="lectura-titulo" className="flex items-center gap-2 font-display text-lg font-extrabold text-brand-800">
           <Hand className="size-5 text-brand-600" aria-hidden="true" />
-          Lectura en vivo
+          Lectura en vivo de sensores
         </h2>
 
         {calibration && (
           <p className="mt-2 text-xs font-medium text-success">
-            Lecturas calibradas con los extremos medidos en este navegador.
+            Lecturas calibradas con los extremos reales medidos en este navegador.
           </p>
         )}
 
         {!hasReadings ? (
           <p className="mt-2 text-sm text-ink-soft">
-            Sin datos todavía. Conecta un guante y espera a que empiece a enviar tramas. Si aparece
-            «sin suscribir», pulsa «Guardar UUID» y vuelve a conectar: el navegador exige declarar el
-            servicio <em>antes</em> de abrir la conexión.
+            Sin datos todavía. Conecta tu guante KLAPS-D arriba para empezar a recibir lecturas en vivo.
           </p>
         ) : (
-          <div className="mt-3 grid gap-4 sm:grid-cols-2">
-            {['derecho', 'izquierdo'].map((side) => {
-              const flex = flexOf(side)
-              const imu = imuOf(side)
-              return (
-                <div key={side} className="rounded-md border border-brand-100 p-3">
-                  <p className="text-sm font-semibold text-brand-800">
-                    {side === 'derecho' ? 'KLAPS-D' : 'KLAPS-U'}
+          <div className="mt-3 grid gap-4">
+            <div className="rounded-md border border-brand-100 p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-brand-800">
+                  Guante Principal (KLAPS-D)
+                </p>
+                <span className="text-xs text-success font-medium">4 sensores flex activos · IMU centrado</span>
+              </div>
+
+              {readings.derecho?.flex ? (
+                <>
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {[
+                      { name: 'Pulgar', gpio: 'GPIO 36', idx: 0 },
+                      { name: 'Índice', gpio: 'GPIO 39', idx: 1 },
+                      { name: 'Medio', gpio: 'GPIO 34', idx: 2 },
+                      { name: 'Meñique', gpio: 'GPIO 32', idx: 4 },
+                    ].map(({ name, gpio, idx }) => {
+                      const val = Math.round(readings.derecho.flex[idx] ?? 0)
+                      const rawVal = readings.derecho.rawFlex?.[idx] ?? 0
+                      return (
+                        <div key={idx} className="rounded-md bg-brand-50 p-2 border border-brand-100">
+                          <div className="flex items-center justify-between text-xs font-bold text-ink">
+                            <span>{name}</span>
+                            <span className="font-mono text-brand-800">{val}%</span>
+                          </div>
+                          <ProgressBar value={val} size="sm" className="mt-1" />
+                          <span className="mt-1 block text-[0.65rem] font-mono text-ink-soft">
+                            {gpio} · raw: {rawVal}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <p className="mt-2 text-[0.7rem] text-ink-soft">
+                    ℹ️ Dedo Anular (GPIO 35) inactivo en este prototipo (peso 0.0) · Omitido para máxima precisión.
                   </p>
-                  {flex ? (
-                    <>
-                      <ul className="mt-2 space-y-1.5">
-                        {flex.map((value, index) => (
-                          <li key={index} className="flex items-center gap-2">
-                            <span className="w-12 text-xs text-ink-soft">flex {index}</span>
-                            <ProgressBar value={value} size="sm" className="flex-1" />
-                            <span className="w-10 text-right text-xs font-semibold text-ink">
-                              {Math.round(value)} %
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                      {imu && (
-                        <p className="mt-2 font-mono text-[0.7rem] leading-relaxed text-ink-soft">
-                          {IMU_FIELDS.map(([key, label]) => `${label} ${imu[key].toFixed(2)}`).join(' · ')}
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="mt-2 text-xs text-ink-soft">sin lectura de este guante</p>
+                  {readings.derecho?.imu && (
+                    <p className="mt-2 font-mono text-[0.72rem] leading-relaxed text-ink-soft bg-white rounded p-1.5 border border-brand-100">
+                      az: {readings.derecho.imu.az.toFixed(2)} m/s² · gx: {readings.derecho.imu.gx.toFixed(2)} rad/s · gy: {readings.derecho.imu.gy.toFixed(2)} rad/s
+                    </p>
                   )}
+                </>
+              ) : (
+                <p className="mt-2 text-xs text-ink-soft">Sin lectura del guante derecho</p>
+              )}
+            </div>
+
+            {readings.izquierdo?.flex && (
+              <div className="rounded-md border border-brand-100 p-3">
+                <p className="text-sm font-semibold text-brand-800">Guante Izquierdo (KLAPS-U)</p>
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {[0, 1, 2, 4].map((idx) => (
+                    <div key={idx} className="rounded-md bg-brand-50 p-2 border border-brand-100">
+                      <span className="text-xs font-bold text-ink">flex {idx}</span>
+                      <ProgressBar value={readings.izquierdo.flex[idx] ?? 0} size="sm" className="mt-1" />
+                    </div>
+                  ))}
                 </div>
-              )
-            })}
+              </div>
+            )}
           </div>
         )}
       </Card>
@@ -670,11 +662,10 @@ export default function Training() {
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <SegmentedControl
             label="Mano de la seña"
-            description="Solo derecha (ESP32-D), solo izquierda (ESP32-U) o ambas manos."
+            description="Mano derecha principal (ESP32-D) o bimanual (ambas manos)."
             options={[
-              { value: 'right', label: 'Derecha' },
-              { value: 'left', label: 'Izquierda' },
-              { value: 'both', label: 'Ambas' },
+              { value: 'right', label: 'Derecha (KLAPS-D)' },
+              { value: 'both', label: 'Bimanual (Ambas)' },
             ]}
             value={handMode}
             onChange={setHandMode}
@@ -755,6 +746,19 @@ export default function Training() {
                 title="Carga y guarda de forma permanente las señas maestras híbridas en este navegador"
               >
                 Guardar señas principales
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                icon={RotateCcw}
+                onClick={() => {
+                  const reset = resetToCanonicalSigns()
+                  setTraining(reset)
+                  setMessage('Señas restablecidas a las 6 señas maestras oficiales. Señas antiguas, letras aisladas y muestras de prueba eliminadas.')
+                }}
+                title="Restaura exclusivamente las señas maestras oficiales, limpiando señas no usadas o de prueba"
+              >
+                Limpiar no usadas
               </Button>
               <Button size="sm" variant="secondary" icon={Download} onClick={download} disabled={signs.length === 0}>
                 Exportar

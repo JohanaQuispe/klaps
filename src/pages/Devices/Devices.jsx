@@ -119,7 +119,7 @@ export default function Devices() {
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge
               status={connectedCount > 0 ? 'conectado' : 'desconectado'}
-              label={`${connectedCount} de ${gloves.length} conectados`}
+              label={connectedCount > 0 ? (connectedCount === 1 ? '1 guante conectado' : `${connectedCount} guantes conectados`) : 'Desconectado'}
             />
             <Button
               variant="secondary"
