@@ -29,27 +29,28 @@ export const DYNAMIC_STEPS = 16
 export const DYNAMIC_FEATURE_SIZE = FEATURE_SIZE * DYNAMIC_STEPS
 
 /**
- * Ponderación por sensor dentro de un fotograma.
- * Cada guante aporta: flex0..4, ax, ay, az, gx, gy, gz.
+ * Motor: 100% Flex (MPU6050 solo SOS)
  *
- * En señas estáticas:
- *   · flex 1,4 → evalúa cada dedo por separado con gran peso.
- *   · aceleración 1,8 → inclinación de muñeca (pitch/roll/az), clave para
- *     diferenciar señas con dedos similares pero distinta orientación (ej. Hola vs Bien).
- *   · giroscopio 0,2 → peso mínimo para que el ruido de reposo no diluya la postura.
+ * El MPU6050 (ax, ay, az, gx, gy, gz) tiene peso 0.0 absoluto en el reconocimiento
+ * y entrenamiento de señas, para que girar o mover la muñeca en el aire no altere
+ * la palabra reconocida.
  *
- * En señas dinámicas:
- *   · flex 0,7 → la postura de los dedos no debe dominar una palabra con movimiento.
- *   · aceleración 2,5 → dirección e inclinación de la mano.
- *   · giroscopio 3,2 → el giro de la muñeca (Ñ, doble letra, cambios de sentido).
+ * La comparación se evalúa EXCLUSIVAMENTE con el vector de los 4 sensores flex
+ * activos calibrados (Pulgar, Índice, Medio y Meñique). El Anular tiene peso 0.
  */
 export const STATIC_FLEX_WEIGHT = 1.4
-export const STATIC_ACCEL_WEIGHT = 1.8
-export const STATIC_GYRO_WEIGHT = 0.2
+export const STATIC_ACCEL_WEIGHT = 0.0
+export const STATIC_GYRO_WEIGHT = 0.0
 
-export const FLEX_WEIGHT = 0.7
-export const ACCEL_WEIGHT = 2.5
-export const GYRO_WEIGHT = 3.2
+export const FLEX_WEIGHT = 1.4
+export const ACCEL_WEIGHT = 0.0
+export const GYRO_WEIGHT = 0.0
+
+/** Tolerancia estricta por dedo individual (±12%). */
+export const STRICT_FINGER_TOLERANCE = 12
+
+/** Descarte inmediato: Si alguno de los 4 dedos se desvía más de 18%, descarta la seña. */
+export const STRICT_MAX_FINGER_DIFF = 18
 
 const STATIC_ONE_HAND_WEIGHTS = [
   STATIC_FLEX_WEIGHT, STATIC_FLEX_WEIGHT, STATIC_FLEX_WEIGHT, STATIC_FLEX_WEIGHT, STATIC_FLEX_WEIGHT,
@@ -69,18 +70,19 @@ const FRAME_WEIGHTS = {
 }
 
 export const K = 3
-/** Confianza mínima estricta (≥ 85 %) para dar por buena una seña sin falsos positivos. */
-export const CONFIDENCE_THRESHOLD = 0.85
+/** Confianza mínima estricta (≥ 80 %) para dar por buena una seña sin falsos positivos. */
+export const CONFIDENCE_THRESHOLD = 0.8
 
 /** Margen mínimo de separación relativo entre la seña ganadora y la segunda candidata. */
 export const MIN_SEPARATION_MARGIN = 0.25
 
 /**
- * Distancia (RMS por dimensión, sobre valores 0-100) a la que la similitud ya
- * es cero. Escala ajustada a 45 para mayor rigor anatómico en señas estáticas.
+ * Escala de distancia ajustada a 35 para discriminación estricta de dedos:
+ * Si los 4 dedos coinciden dentro de ±8%, la similitud es > 80%.
+ * Si algún dedo difiere más de 18%, la distancia es Infinity y la similitud es 0.
  */
-export const STATIC_DISTANCE_SCALE = 45
-export const DYNAMIC_DISTANCE_SCALE = 70
+export const STATIC_DISTANCE_SCALE = 35
+export const DYNAMIC_DISTANCE_SCALE = 50
 
 /** Convierte distancia en similitud 0-1 (1 = idéntico). */
 export function similarityFromDistance(distance, scale = STATIC_DISTANCE_SCALE) {
@@ -146,14 +148,13 @@ export function handView(vector, handMode = 'both') {
 
 /**
  * Pesos de un paso clave según la mano, el tipo de seña, la máscara de canales activos y el modo.
- * Si un canal flex está marcado como inactivo o con rango insuficiente en la calibración,
- * se le asigna peso 0 para compensar el hardware por software.
  *
- * Si `flexOnly` es true (Modo Palabras):
+ * Motor: 100% Flex (MPU6050 peso 0 absoluto):
  * Se anula el peso de los 6 ejes del MPU6050 (ax, ay, az, gx, gy, gz = peso 0),
  * evaluando al 100% únicamente los 4 dedos activos calibrados (pulgar, índice, medio, meñique).
+ * El canal del dedo Anular (desconectado) se fuerza siempre a peso 0.
  */
-export function weightView(handMode = 'both', type = 'static', activeMask = null, flexOnly = false) {
+export function weightView(handMode = 'both', type = 'static', activeMask = null, _flexOnly = true) {
   const mode = normalizeHandMode(handMode)
   const kind = normalizeGestureType(type)
   const perStep = [...FRAME_WEIGHTS[kind]]
@@ -174,16 +175,18 @@ export function weightView(handMode = 'both', type = 'static', activeMask = null
     }
   }
 
-  // 100% Flex en Modo Palabras: MPU6050 reservado exclusivamente para el gatillo SOS
-  if (flexOnly) {
-    // Guante derecho IMU: dimensiones 5..10 en el fotograma de 22
-    for (let i = 5; i <= 10; i++) {
-      perStep[i] = 0
-    }
-    // Guante izquierdo IMU: dimensiones 16..21 en el fotograma de 22
-    for (let i = 16; i <= 21; i++) {
-      perStep[i] = 0
-    }
+  // El Anular desconectado (índice 3 derecha, índice 14 izquierda) siempre tiene peso 0
+  perStep[3] = 0
+  perStep[14] = 0
+
+  // 100% Flex: El MPU6050 (ax, ay, az, gx, gy, gz) SIEMPRE tiene peso 0.0 absoluto en comparación de señas
+  // Guante derecho IMU: dimensiones 5..10 en el fotograma de 22
+  for (let i = 5; i <= 10; i++) {
+    perStep[i] = 0
+  }
+  // Guante izquierdo IMU: dimensiones 16..21 en el fotograma de 22
+  for (let i = 16; i <= 21; i++) {
+    perStep[i] = 0
   }
 
   const weights = []
@@ -206,14 +209,16 @@ export function euclideanDistance(a, b) {
 }
 
 /**
- * Distancia entre dos vectores comparando solo las dimensiones de la mano y
- * ponderando cada sensor (RMS ponderada: queda en la misma escala 0-100 que
- * la distancia normal, así los umbrales siguen valiendo).
+ * Distancia entre dos vectores evaluando EXCLUSIVAMENTE los 4 sensores flex calibrados.
+ * El MPU6050 tiene peso 0.0 absoluto y el Anular tiene peso 0.0 absoluto.
  *
- * En señas estáticas:
- *   · flex 1,4 por dedo activo: evalúa dedos individuales. Canales muertos reciben peso 0.
- *   · si flexOnly es true: 100% flex sobre los 4 dedos activos (MPU6050 peso 0).
- *   · si flexOnly es false: ax, ay, az 1,8 para inclinación de muñeca.
+ * Criterios de discriminación y contraste estricto:
+ * 1. Descarte inmediato: Si alguno de los 4 dedos activos (pulgar, índice, medio, meñique)
+ *    se desvía más de 18% respecto a la seña entrenada, se descarta la coincidencia de inmediato
+ *    (retorna Infinity). Esto previene que «Hola», «Bien» y «Gracias» se confundan entre sí.
+ * 2. Curva de contraste: Tolerancia estricta de ±12% por dedo. Si la diferencia excede 12%,
+ *    se penaliza cuadráticamente para que una seña solo coincida si cada uno de los 4 dedos
+ *    está en la posición correcta.
  */
 export function handDistance(
   a,
@@ -221,7 +226,7 @@ export function handDistance(
   handMode = 'both',
   type = 'static',
   activeMask = null,
-  flexOnly = false,
+  flexOnly = true,
 ) {
   const viewA = handView(a, handMode)
   const viewB = handView(b, handMode)
@@ -230,36 +235,38 @@ export function handDistance(
   const weights = weightView(handMode, type, activeMask, flexOnly)
   let sum = 0
   let total = 0
-  let maxSingleDiff = 0
 
   for (let index = 0; index < viewA.length; index += 1) {
     const weight = weights[index % weights.length]
-    // Ignorar por completo canales inactivos / muertos o ejes MPU6050 en flexOnly (peso 0)
+    // Ignorar por completo canales inactivos / muertos o ejes MPU6050 (peso 0)
     if (weight <= 0) continue
 
     const diff = Math.abs(viewA[index] - viewB[index])
-    sum += weight * diff * diff
-    total += weight
 
-    // En señas estáticas, verificar si algún sensor activo discrepa
-    if (diff > maxSingleDiff) {
-      maxSingleDiff = diff
+    // REGLA CRÍTICA 1: Si alguno de los 4 dedos activos se desvía más de 18%,
+    // descarta la coincidencia inmediatamente.
+    if (diff > STRICT_MAX_FINGER_DIFF) {
+      return Infinity
     }
+
+    // REGLA CRÍTICA 2: Curva de contraste estricta con tolerancia de ±12%
+    const contrastDiff =
+      diff <= STRICT_FINGER_TOLERANCE
+        ? diff
+        : diff + (diff - STRICT_FINGER_TOLERANCE) * 2.2
+
+    sum += weight * contrastDiff * contrastDiff
+    total += weight
   }
 
-  const rms = Math.sqrt(sum / Math.max(total, 1e-9))
+  if (total === 0) return Infinity
 
-  // Penalización si algún sensor activo discrepa fuertemente (> 35 %)
-  if (type === 'static' && maxSingleDiff > 35) {
-    const excess = maxSingleDiff - 35
-    return rms + excess * 0.35
-  }
-
+  const rms = Math.sqrt(sum / total)
   return rms
 }
 
 /** Vecinos más cercanos y confianza ponderada por cercanía y margen de separación. */
-function rank(vector, samples, k, scale, type = 'static', activeMask = null, flexOnly = false) {
+function rank(vector, samples, k, scale, type = 'static', activeMask = null, flexOnly = true) {
   if (!Array.isArray(vector) || vector.length === 0) return null
   if (!Array.isArray(samples) || samples.length === 0) return null
 
@@ -338,7 +345,7 @@ export function classify(
   k = K,
   scale = STATIC_DISTANCE_SCALE,
   activeMask = null,
-  flexOnly = false,
+  flexOnly = true,
 ) {
   const statics = (samples ?? []).filter((sample) => normalizeGestureType(sample.type) === 'static')
   return rank(vector, statics, k, scale, 'static', activeMask, flexOnly)
@@ -352,7 +359,7 @@ export function classify(
  * @param {number} k número de vecinos
  * @param {number} scale escala de distancia
  * @param {boolean[]} [activeMask] máscara de canales flex válidos
- * @param {boolean} [flexOnly] si es true, evalúa solo flex
+ * @param {boolean} [flexOnly] si es true, evalúa solo flex (100% flex, MPU6050 peso 0)
  */
 export function classifyTrajectory(
   trajectory,
@@ -360,7 +367,7 @@ export function classifyTrajectory(
   k = K,
   scale = DYNAMIC_DISTANCE_SCALE,
   activeMask = null,
-  flexOnly = false,
+  flexOnly = true,
 ) {
   const dynamics = (samples ?? []).filter((sample) => sample.type === 'dynamic')
   return rank(trajectory, dynamics, k, scale, 'dynamic', activeMask, flexOnly)

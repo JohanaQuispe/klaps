@@ -30,12 +30,13 @@ const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
 /**
  * Convierte un valor crudo ADC de un sensor flex en porcentaje de flexión (0-100%).
- * Fórmula oficial: clamp((openRaw - raw) / (openRaw - closedRaw), 0, 1) * 100
+ * Fórmula oficial con curva de contraste suave (smoothstep):
+ * 1. Normalización Min-Max: clamp((openRaw - raw) / (openRaw - closedRaw), 0, 1)
+ * 2. Curva de contraste: f(x) = 3x² - 2x³ para acentuar la separación entre
+ *    posturas y discriminar nítidamente los 4 dedos activos en su recorrido (~75 a 135 ADC).
  *
  * Al cerrar el puño, los valores crudos del ADC disminuyen (openRaw > closedRaw),
- * por lo que (openRaw - raw) crece de 0 a (openRaw - closedRaw) y genera 0% a 100%.
- *
- * Si el sensor está desconectado (raw === 0), devuelve 0%.
+ * por lo que el porcentaje crece de 0% a 100%. Si raw === 0 (anular desconectado), devuelve 0%.
  */
 export function calculateFlexPercentage(raw, openRaw, closedRaw) {
   if (!Number.isFinite(raw) || raw === 0) return 0
@@ -44,8 +45,9 @@ export function calculateFlexPercentage(raw, openRaw, closedRaw) {
   const span = openRaw - closedRaw
   if (Math.abs(span) < 12) return 0
 
-  const ratio = (openRaw - raw) / span
-  return clamp(ratio, 0, 1) * 100
+  const linear = clamp((openRaw - raw) / span, 0, 1)
+  const contrasted = linear * linear * (3 - 2 * linear)
+  return contrasted * 100
 }
 
 /**
