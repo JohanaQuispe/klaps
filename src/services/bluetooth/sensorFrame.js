@@ -57,9 +57,9 @@ export function calculateFlexPercentage(raw, openRaw, closedRaw) {
   // 2. Si raw es una lectura ADC analógica directa (> 150):
   if (raw > 150) {
     // Si openRaw y closedRaw son por defecto (0 y 100) o no están en rango ADC,
-    // usamos la referencia física del hardware KLAPS (Abierto ~1030, Cerrado ~890)
-    const effOpen = openRaw && openRaw > 150 ? openRaw : 1030
-    const effClosed = closedRaw && closedRaw > 150 ? closedRaw : 890
+    // usamos la referencia física del hardware KLAPS medida en laboratorio (Abierto ~980, Cerrado ~850)
+    const effOpen = openRaw && openRaw > 150 ? openRaw : 980
+    const effClosed = closedRaw && closedRaw > 150 ? closedRaw : 850
     const span = Math.abs(effOpen - effClosed)
     if (span < 12) return 0
 
