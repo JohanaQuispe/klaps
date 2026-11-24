@@ -269,6 +269,9 @@ export default function Translation() {
     [readings],
   )
 
+  const activeReading = readings.derecho || readings.izquierdo
+  const activeHandFlex = activeReading?.flex ?? [0, 0, 0, 0, 0]
+
   const { live, resting, restReason } = useGestureRecognition({
     vector: featureVector,
     readings,
@@ -279,7 +282,7 @@ export default function Translation() {
     threshold: CONFIDENCE_THRESHOLD,
     holdMs: 1400,
     cooldownMs: currentSpeed.cooldownMs,
-    flexOnly: translationMode === 'words',
+    flexOnly: true,
     onRecognize: handleRecognize,
   })
 
@@ -662,6 +665,57 @@ export default function Translation() {
           </div>
         </div>
 
+        {/* Indicador de Motor: 100% Flex (MPU6050 solo SOS) y barras de flexión en vivo */}
+        <div className="mt-4 rounded-xl border border-brand-200 bg-linear-to-b from-brand-50/90 to-white p-4 shadow-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="inline-flex items-center gap-2">
+              <span className="relative flex size-2.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+                <span className="relative inline-flex size-2.5 rounded-full bg-success" />
+              </span>
+              <span className="text-xs font-black uppercase tracking-wider text-brand-900">
+                Motor: 100% Flex (MPU6050 solo SOS)
+              </span>
+            </div>
+            <span className="text-[0.7rem] font-semibold text-brand-700">
+              Muñeca/MPU6050 peso 0 · Anular ignorado (peso 0)
+            </span>
+          </div>
+
+          <p className="mt-1 text-[0.7rem] text-ink-soft">
+            La coincidencia de la seña depende exclusivamente de los 4 dedos activos (tolerancia ±12%, descarte inmediato si &gt;18%). Mover la muñeca en el aire no altera el porcentaje de coincidencia.
+          </p>
+
+          {/* Barras porcentuales en vivo de los 4 dedos flex activos */}
+          <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+            {[
+              { id: 0, label: 'Pulgar', short: 'Pul', val: activeHandFlex[0] ?? 0 },
+              { id: 1, label: 'Índice', short: 'Índ', val: activeHandFlex[1] ?? 0 },
+              { id: 2, label: 'Medio', short: 'Med', val: activeHandFlex[2] ?? 0 },
+              { id: 4, label: 'Meñique', short: 'Meñ', val: activeHandFlex[4] ?? 0 },
+            ].map((finger) => (
+              <div
+                key={finger.id}
+                className="rounded-lg border border-brand-200/90 bg-white p-2.5 shadow-2xs"
+              >
+                <div className="flex items-center justify-between text-xs font-bold text-ink">
+                  <span className="flex items-center gap-1">
+                    <span>{finger.short}</span>
+                    <span className="text-[0.65rem] font-normal text-ink-soft">({finger.label})</span>
+                  </span>
+                  <span className="font-mono text-brand-800">{Math.round(finger.val)}%</span>
+                </div>
+                <ProgressBar
+                  className="mt-1.5"
+                  value={finger.val}
+                  tone={finger.val >= 60 ? 'brand' : finger.val >= 25 ? 'brand' : 'ink'}
+                  size="sm"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Señal en vivo: etiqueta, confianza y tiempo estabilizado */}
         <div className="mt-4 rounded-md border border-brand-100 bg-white px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
@@ -689,7 +743,7 @@ export default function Translation() {
                 <p className="font-bold">Gesto ambiguo detectado</p>
                 <p className="mt-0.5 text-ink">
                   Similitud muy cercana entre <strong>«{live.ambiguousLabels[0]}»</strong> y <strong>«{live.ambiguousLabels[1]}»</strong>.
-                  Ajusta la inclinación de la muñeca (pitch/roll) o define mejor la postura de los dedos para desempatar.
+                  Define con mayor precisión la postura de los 4 dedos activos (pulgar, índice, medio, meñique) para desempatar.
                 </p>
               </div>
             </div>

@@ -130,8 +130,10 @@ export default function Training() {
     vector: featureVector,
     readings,
     signs,
+    calibration,
     enabled: testing,
     availableHands,
+    flexOnly: true,
     onRecognize: (result) => setLastTest({ ...result, at: Date.now() }),
   })
 
@@ -243,7 +245,7 @@ export default function Training() {
         if (existingSign.label.toLowerCase() === name.toLowerCase()) continue
         for (const sample of existingSign.samples ?? []) {
           if (sample.vector?.length === meanVector.length) {
-            const dist = handDistance(meanVector, sample.vector, handMode, gestureType, activeMask)
+            const dist = handDistance(meanVector, sample.vector, handMode, gestureType, activeMask, true)
             if (dist < minDistance) {
               minDistance = dist
               closestSign = existingSign
@@ -258,8 +260,8 @@ export default function Training() {
 
       const separationMsg =
         minDistance < 18 && closestSign
-          ? `⚠️ Advertencia: Separación estrecha (${minDistance.toFixed(1)}) frente a «${closestSign.label}». Procura variar la inclinación de la muñeca para distinguirlas mejor.`
-          : `Margen de separación óptimo (${minDistance === Infinity ? 'primera seña' : `${minDistance.toFixed(1)} puntos`}).`
+          ? `⚠️ Advertencia: Separación estrecha (${minDistance.toFixed(1)}) frente a «${closestSign.label}». Procura variar la postura de los 4 dedos (pulgar, índice, medio, meñique) para distinguirlas mejor.`
+          : `Margen de separación óptimo (${minDistance === Infinity ? 'diferenciación clara de dedos' : `${minDistance.toFixed(1)} puntos`}).`
 
       setMessage(
         `«${name}» guardada con éxito (3 tomas consecutivas, ${stored.length} muestras). ${separationMsg}`,
