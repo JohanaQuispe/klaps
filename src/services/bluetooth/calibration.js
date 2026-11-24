@@ -45,17 +45,13 @@ export const FINGER_NAMES = [
 ]
 
 /**
- * Valores medidos en hardware real en guante derecho (KLAPS_Guante_D):
- * Al cerrar el puño los valores crudos del ADC disminuyen (invertidos):
- *   - Pulgar:  Abierto 1000 -> Cerrado 900 (span: 100)
- *   - Índice:  Abierto 1034 -> Cerrado 959 (span: 75)
- *   - Medio:   Abierto 1030 -> Cerrado 895 (span: 135)
- *   - Anular:  0 fijo (desconectado, ignorar con peso 0)
- *   - Meñique: Abierto 850  -> Cerrado 752 (span: 98)
- * (Índices 0..4 = Guante Derecho, 5..9 = Guante Izquierdo)
+ * Calibración predeterminada compatible con el firmware oficial KLAPS (0-100%):
+ * - Dedo recto (mano abierta)  -> 0 % de flexión.
+ * - Dedo doblado (puño cerrado) -> 100 % de flexión.
+ * - Anular desconectado        -> 0 % fijo (ignorado con peso 0).
  */
-export const DEFAULT_OPEN_RAW = [1000, 1034, 1030, 0, 850, 1000, 1034, 1030, 0, 850]
-export const DEFAULT_CLOSED_RAW = [900, 959, 895, 0, 752, 900, 959, 895, 0, 752]
+export const DEFAULT_OPEN_RAW = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+export const DEFAULT_CLOSED_RAW = [100, 100, 100, 0, 100, 100, 100, 100, 0, 100]
 export const DEFAULT_VALID = [true, true, true, false, true, true, true, true, false, true]
 
 export const DEFAULT_CALIBRATION = {
@@ -64,8 +60,8 @@ export const DEFAULT_CALIBRATION = {
   flex: {
     openRaw: [...DEFAULT_OPEN_RAW],
     closedRaw: [...DEFAULT_CLOSED_RAW],
-    min: [900, 959, 895, 0, 752, 900, 959, 895, 0, 752],
-    max: [1000, 1034, 1030, 0, 850, 1000, 1034, 1030, 0, 850],
+    min: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    max: [100, 100, 100, 0, 100, 100, 100, 100, 0, 100],
     valid: [...DEFAULT_VALID],
   },
   imu: {
