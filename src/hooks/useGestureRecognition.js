@@ -42,7 +42,7 @@ const ALL_HANDS = { right: true, left: true }
 function hasRequiredHands(handMode, available) {
   if (handMode === 'right') return Boolean(available.right)
   if (handMode === 'left') return Boolean(available.left)
-  return Boolean(available.right && available.left)
+  return Boolean(available.right || available.left)
 }
 
 const liveState = (result, progress, stable, mode, extra = {}) => ({
