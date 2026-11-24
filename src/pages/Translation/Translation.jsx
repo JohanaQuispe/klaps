@@ -83,6 +83,8 @@ export default function Translation() {
   const { supported: speechSupported, speak, speaking, stop: stopSpeech } = useAppSpeech()
   const { copied, error: copyError, copy } = useClipboard()
   const {
+    connect,
+    disconnect,
     featureVector,
     readings,
     hasReadings,
@@ -97,8 +99,21 @@ export default function Translation() {
     readingsRef.current = readings
   }, [readings])
 
-  const [training, setTraining] = useState(loadTraining)
+  const [training, setTraining] = useState(() => {
+    const loaded = loadTraining()
+    if (!loaded.signs || loaded.signs.length === 0) {
+      return saveCanonicalSigns(loaded)
+    }
+    return loaded
+  })
   const [listening, setListening] = useState(false)
+
+  // Auto-iniciar la detección en cuanto el guante envíe lecturas
+  useEffect(() => {
+    if (hasReadings) {
+      setListening(true)
+    }
+  }, [hasReadings])
   const [words, setWords] = useState([])
   const [lastMatch, setLastMatch] = useState(null)
   const [corrected, setCorrected] = useState(null)
@@ -465,10 +480,29 @@ export default function Translation() {
       <PageHeader
         eyebrow="Traducción"
         title="Traducción de gestos"
-        description="Tus guantes leen la postura de las dos manos y KLAPS la convierte en texto y voz en tiempo real."
+        description="Tus guantes leen la postura de las manos y KLAPS la convierte en texto y voz en tiempo real."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={status.status} label={status.label} />
+            {connected > 0 ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={Bluetooth}
+                onClick={() => disconnect('derecho')}
+              >
+                Desconectar guante
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                size="sm"
+                icon={Bluetooth}
+                onClick={() => connect('derecho')}
+              >
+                Conectar guante KLAPS
+              </Button>
+            )}
             <Button
               variant="secondary"
               size="sm"
@@ -478,11 +512,35 @@ export default function Translation() {
                 setQuickResult(describeCalibration(calibration))
               }}
             >
-              Calibrar mano abierta / puño cerrado
+              Calibrar
             </Button>
           </div>
         }
       />
+
+      {connected === 0 && (
+        <Card tone="lilac" padding="md" className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-700">
+              <Bluetooth className="size-5" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="font-display font-bold text-brand-800">Conecta tu guante KLAPS</p>
+              <p className="text-xs text-ink-soft">
+                Pulsa el botón para vincular tu placa ESP32 por Bluetooth LE y comenzar a traducir en tiempo real.
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="primary"
+            icon={Bluetooth}
+            onClick={() => connect('derecho')}
+          >
+            Conectar por Bluetooth
+          </Button>
+        </Card>
+      )}
 
       {!protocolConfigured && (
         <ErrorMessage
