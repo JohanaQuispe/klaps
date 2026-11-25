@@ -731,16 +731,15 @@ export default function Translation() {
           </div>
 
           <p className="mt-1 text-[0.7rem] text-ink-soft">
-            Señas estáticas evaluadas al 100% en los 4 dedos (tolerancia ±12%, descarte &gt;18%). Señas dinámicas evalúan la trayectoria espacio-temporal con giroscopio y acelerómetro.
+            Señas evaluadas en los 3 sensores principales (Pulgar, Medio, Meñique · peso 1.4). Índice y Anular cancelados (peso 0). Señas dinámicas evalúan además trayectoria espacio-temporal MPU-6050.
           </p>
 
-          {/* Barras porcentuales en vivo de los 4 dedos flex activos */}
-          <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+          {/* Barras porcentuales en vivo de los 3 dedos flex activos */}
+          <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
             {[
-              { id: 0, label: 'Pulgar', short: 'Pul', val: activeHandFlex[0] ?? 0, raw: activeReading?.rawFlex?.[0] ?? 0 },
-              { id: 1, label: 'Índice', short: 'Índ', val: activeHandFlex[1] ?? 0, raw: activeReading?.rawFlex?.[1] ?? 0 },
-              { id: 2, label: 'Medio', short: 'Med', val: activeHandFlex[2] ?? 0, raw: activeReading?.rawFlex?.[2] ?? 0 },
-              { id: 4, label: 'Meñique', short: 'Meñ', val: activeHandFlex[4] ?? 0, raw: activeReading?.rawFlex?.[4] ?? 0 },
+              { id: 0, label: 'Pulgar (GPIO 36)', short: 'Pulgar', val: activeHandFlex[0] ?? 0, raw: activeReading?.rawFlex?.[0] ?? 0 },
+              { id: 2, label: 'Medio (GPIO 34)', short: 'Medio', val: activeHandFlex[2] ?? 0, raw: activeReading?.rawFlex?.[2] ?? 0 },
+              { id: 4, label: 'Meñique (GPIO 32)', short: 'Meñique', val: activeHandFlex[4] ?? 0, raw: activeReading?.rawFlex?.[4] ?? 0 },
             ].map((finger) => (
               <div
                 key={finger.id}
@@ -748,7 +747,7 @@ export default function Translation() {
               >
                 <div className="flex items-center justify-between text-xs font-bold text-ink">
                   <span className="flex items-center gap-1">
-                    <span>{finger.short}</span>
+                    <span className="font-semibold text-brand-900">{finger.short}</span>
                     <span className="text-[0.65rem] font-normal text-ink-soft">({finger.label})</span>
                   </span>
                   <div className="text-right">
