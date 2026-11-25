@@ -291,21 +291,42 @@ export function buildCalibration({ stretched = [], closed = [], neutral = [] } =
     return Math.round(avg)
   })
 
-  const valid = openRaw.map((openVal, index) => {
+  // Sanitización de dedos activos: si un dedo físico (0, 1, 2, 4) no tuvo suficiente rango o openVal > 50
+  // (por ejemplo, porque la mano estaba agarrando el ratón al pulsar «Iniciar calibración»),
+  // se asegura que mantenga el rango directo estándar (0 abierto, 100 cerrado) y quede ACTIVO (peso 1.4).
+  const safeOpen = openRaw.map((openVal, index) => {
+    if (index % 5 === 3) return 0 // Anular desconectado siempre 0
     const closedVal = closedRaw[index]
-    if (openVal === 0 && closedVal === 0) return false
-    return Math.abs(openVal - closedVal) >= MIN_FLEX_SPAN
+    if (Math.abs(openVal - closedVal) < MIN_FLEX_SPAN || openVal > 50) {
+      return 0
+    }
+    return openVal
   })
 
-  const min = openRaw.map((o, i) => Math.min(o, closedRaw[i]))
-  const max = openRaw.map((o, i) => Math.max(o, closedRaw[i]))
+  const safeClosed = closedRaw.map((closedVal, index) => {
+    if (index % 5 === 3) return 0 // Anular desconectado
+    const openVal = safeOpen[index]
+    if (Math.abs(openVal - closedVal) < MIN_FLEX_SPAN || closedVal <= 50) {
+      return 100
+    }
+    return closedVal
+  })
+
+  const valid = safeOpen.map((_, index) => {
+    // El anular (índice 3 en derecho, 8 en izquierdo) está desconectado físicamente
+    if (index % 5 === 3) return false
+    return true
+  })
+
+  const min = safeOpen.map((o, i) => Math.min(o, safeClosed[i]))
+  const max = safeOpen.map((o, i) => Math.max(o, safeClosed[i]))
 
   return {
     version: 1,
     createdAt: Date.now(),
     flex: {
-      openRaw,
-      closedRaw,
+      openRaw: safeOpen,
+      closedRaw: safeClosed,
       min,
       max,
       valid,
