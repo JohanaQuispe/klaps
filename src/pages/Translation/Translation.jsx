@@ -400,13 +400,19 @@ export default function Translation() {
 
     setCalibratingQuick(true)
     setQuickResult(null)
-    setQuickNotice('')
 
     const FRAMES_PER_STEP = 20
     const snapshots = { stretched: [], closed: [] }
 
     try {
+      // Cuenta regresiva de preparación (3 segundos) para soltar el ratón y estirar la mano
+      for (let c = 3; c >= 1; c -= 1) {
+        setQuickNotice(`¡Prepárate! Suelta el ratón y abre bien la mano en ${c}s…`)
+        await wait(1000)
+      }
+
       // Paso 1: Mano abierta (2.0 segundos)
+      setQuickNotice('¡Capturando mano abierta! Mantén todos los dedos bien estirados…')
       setQuickStep(0)
       setQuickProgress(0)
       for (let i = 0; i < FRAMES_PER_STEP; i += 1) {
@@ -418,11 +424,14 @@ export default function Translation() {
         await wait(100)
       }
 
-      // Intervalo de transición para cambiar postura
-      setQuickNotice('¡Mano abierta capturada! Ahora cierra el puño firmemente...')
-      await wait(1000)
+      // Intervalo de transición para cambiar postura (2 segundos)
+      for (let c = 2; c >= 1; c -= 1) {
+        setQuickNotice(`¡Mano abierta registrada! Cierra el puño con fuerza en ${c}s…`)
+        await wait(1000)
+      }
 
       // Paso 2: Puño cerrado (2.0 segundos)
+      setQuickNotice('¡Capturando puño cerrado! Aprieta fuerte todos los dedos…')
       setQuickStep(1)
       setQuickProgress(0)
       for (let i = 0; i < FRAMES_PER_STEP; i += 1) {
@@ -438,7 +447,7 @@ export default function Translation() {
       applyCalibrationSettings(next)
       const desc = describeCalibration(next)
       setQuickResult(desc)
-      setQuickNotice('¡Auto-calibración completada! Canales activos y pesos asignados.')
+      setQuickNotice('¡Auto-calibración completada! Los 4 dedos activos están al 100% (peso 1.4).')
     } finally {
       setCalibratingQuick(false)
     }
