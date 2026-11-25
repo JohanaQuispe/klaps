@@ -1,164 +1,116 @@
-# GUION TÉCNICO Y ESTRUCTURA DE GRABACIÓN DE VIDEO · PROYECTO KLAPS
+# GUION TÉCNICO INDIVIDUAL (5 MINUTOS EXACTOS) · PROYECTO KLAPS
 
+**Expositora:** Johana Carolina Quispe Ruiz (N00424907)  
 **Curso:** Arquitectura del Computador (2026-2)  
-**Institución:** Universidad Privada del Norte (UPN) — Facultad de Ingeniería — Carrera de Ingeniería de Sistemas Computacionales  
+**Institución:** Universidad Privada del Norte (UPN) — Facultad de Ingeniería  
 **Docente:** Mg. Gustavo Paz Purizaca  
-**Equipo de Proyecto:**
-1. **Camila Nadine Montalvo Abrego** (N00421639)
-2. **Johana Carolina Quispe Ruiz** (N00424907)
-3. **Leoneld Mathias Sotelo Espinoza** (N00421604)
-4. **Joselyn Ivana Tananta Arevalo** (N00433768)
+**Equipo de Proyecto (Mención en carátula):**
+1. Camila Nadine Montalvo Abrego (N00421639)
+2. Johana Carolina Quispe Ruiz (N00424907)
+3. Leoneld Mathias Sotelo Espinoza (N00421604)
+4. Joselyn Ivana Tananta Arevalo (N00433768)
 
-**Despliegue Oficial en Producción (HTTPS para Web Bluetooth en Celulares):**  
-🔗 **[https://klaps-ebon.vercel.app](https://klaps-ebon.vercel.app)**  
-*(URL espejo: `https://klaps-jqs-projects-5beea8bb.vercel.app`)*
+**Documento Oficial en tu Google Drive:**  
+📄 **[https://docs.google.com/document/d/1oPu8LAQgZYlpqRQtIlBnmMNW6Q8x-SfX3i5EBNcv7OM/edit?usp=drivesdk](https://docs.google.com/document/d/1oPu8LAQgZYlpqRQtIlBnmMNW6Q8x-SfX3i5EBNcv7OM/edit?usp=drivesdk)**
 
----
-
-## 1. Ficha Técnica del Video
-
-- **Duración objetivo:** Entre 5 y 10 minutos (Tiempo ideal recomendado: **7 minutos y 30 segundos**).
-- **Formato audiovisual recomendado:** Resolución Full HD (1080p a 30 o 60 fps).
-- **Esquema de encuadre sugerido:**
-  - **Fase de explicación:** Cámara enfocando a los expositores con el prototipo físico en mesa.
-  - **Fase de demostración práctica:** Pantalla dividida (*Picture-in-Picture* o *Split Screen*):
-    - *Lado izquierdo / Ventana principal:* Grabación de la mano con el guante instrumentado ejecutando las señas.
-    - *Lado derecho / Ventana secundaria:* Grabación de pantalla del celular (Android con Google Chrome) mostrando la aplicación web en vivo conectada por Web Bluetooth, con el audio del altavoz activo.
+**Aplicación Web Desplegada en Vercel (HTTPS para Android con Web Bluetooth):**  
+🔗 **[https://klaps-ebon.vercel.app](https://klaps-ebon.vercel.app)**
 
 ---
 
-## 2. Estructura y Cronograma del Video (00:00 a 08:30)
+## 📌 Claves para que no hables mucho y alcances los 5 minutos
 
-| Bloque | Contenido Principal | Tiempo estimado | Responsable sugerido |
-| :--- | :--- | :--- | :--- |
-| **Bloque 1** | Introducción, presentación del equipo y problemática | 00:00 – 01:15 (1m 15s) | Camila Montalvo / Todo el equipo |
-| **Bloque 2** | Arquitectura física y componentes de hardware embebido | 01:15 – 03:00 (1m 45s) | Camila Montalvo & Leoneld Sotelo |
-| **Bloque 3** | Arquitectura lógica, protocolo BLE a 20 Hz e inferencia KNN | 03:00 – 04:45 (1m 45s) | Johana Quispe & Leoneld Sotelo |
-| **Bloque 4** | Demostración en vivo: Conexión móvil, traducción y canal SOS | 04:45 – 07:15 (2m 30s) | Todo el equipo (Demo guiada por Johana y Joselyn) |
-| **Bloque 5** | Métricas de rendimiento, conclusiones de arquitectura y cierre | 07:15 – 08:15 (1m 00s) | Joselyn Tananta / Cierre conjunto |
+- **Duración calculada:** Exactamente **5:05 minutos** (cumples el límite mínimo de 5 minutos sin excederte).
+- **Poco texto:** Solo dices frases concisas con los términos técnicos que el profesor califica.
+- **Rellenar el tiempo con acción:** El grueso del tiempo se llena con la **demostración práctica**: conectando el guante por Bluetooth desde el celular, haciendo la calibración de 3 segundos, ejecutando las vocales (A, E, I, O, U) de forma calmada para que el altavoz del celular hable solo, y probando la alarma SOS.
 
 ---
 
-## 3. Guion Detallado Paso a Paso
+## ⏱️ Cronograma Resumido
 
-### BLOQUE 1 · INTRODUCCIÓN Y PRESENTACIÓN DEL EQUIPO (00:00 – 01:15)
-
-**[ESCENA: Cámara general al equipo. En la mesa se aprecia el guante instrumentado KLAPS, el microcontrolador ESP32 y un teléfono inteligente con la app abierta. Gráfica en pantalla con el logo de KLAPS, UPN y los nombres/códigos de los integrantes].**
-
-- **CAMILA MONTALVO:**
-  > *"Estimado profesor Gustavo Paz y compañeros, somos el grupo de estudiantes de Ingeniería de Sistemas Computacionales de la Universidad Privada del Norte. Hoy presentamos nuestro proyecto final del curso de Arquitectura del Computador: **KLAPS**, un sistema ciberfísico de comunicación asistida mediante guantes inteligentes instrumentados con microcontroladores ESP32, comunicación Bluetooth Low Energy y clasificación inteligente en tiempo real."*
-
-- **JOHANA QUISPE:**
-  > *"En el Perú, más de quinientas mil personas presentan discapacidad auditiva y del habla. La lengua de señas es su medio natural de expresión, pero menos del uno por ciento de la población oyente la comprende. Ante esta barrera, desarrollamos un dispositivo portable, accesible y de bajo costo que traduce la cinemática de la mano a texto y voz audible en cualquier dispositivo móvil sin requerir instalar aplicaciones pesadas ni depender de servidores externos para la traducción."*
+| Minuto | Sección | Qué haces |
+| :--- | :--- | :--- |
+| **00:00 – 00:45** (45s) | **Introducción** | Te presentas y explicas el problema en 3 oraciones. |
+| **00:45 – 01:45** (60s) | **Hardware** | Muestras el guante y señalas el ESP32, los sensores en ADC1 y el MPU-6050. |
+| **01:45 – 02:45** (60s) | **Funcionamiento** | Explicas la trama de 34 bytes a 20 Hz, Vercel con HTTPS y el KNN en el navegador. |
+| **02:45 – 04:30** (1m 45s) | **Demostración en Vivo** | Conectas el guante al celular por Web Bluetooth, calibras y haces las señas. |
+| **04:30 – 05:05** (35s) | **Métricas y Cierre** | Mencionas latencia de 34.3 ms, 94% de precisión y te despides formalmente. |
 
 ---
 
-### BLOQUE 2 · ARQUITECTURA DE HARDWARE Y COMPONENTES (01:15 – 03:00)
+## 🎙️ Guion Paso a Paso
 
-**[ESCENA: Plano detalle o acercamiento (*Close-Up*) a los componentes del guante físico sobre la mesa. Se señalan las partes con la mano o un puntero].**
+### 1. INTRODUCCIÓN (00:00 – 00:45 · 45 segundos)
+*(Cámara enfocándote a ti frente a la mesa con el guante físico y tu celular).*
 
-- **LEONELD SOTELO:**
-  > *"Desde la perspectiva de la arquitectura del hardware, el sistema se fundamenta en un microcontrolador **ESP32 DevKit V1**, basado en la arquitectura **Xtensa Dual-Core LX6 de 32 bits a 240 MHz**. Una decisión arquitectural clave fue desacoplar las tareas del procesador:*
-  > 1. *El **Core 0** se dedica exclusivamente a gestionar la pila de radiofrecuencia Bluetooth Low Energy (BLE).*
-  > 2. *El **Core 1** ejecuta el muestreo analógico de alta velocidad y el bus de comunicaciones de los sensores."*
-
-- **CAMILA MONTALVO:**
-  > *"Para la captura sensorial utilizamos dos subsistemas complementarios:*
-  > - *Primero, **sensores de flexión resistivos de 2.2 pulgadas** ubicados en los dedos del guante. Cada sensor está integrado en un circuito acondicionador mediante divisores de tensión pasivos de 10 kΩ y 47 kΩ. Por diseño de ingeniería y restricción de arquitectura del silicio, conectamos todos los sensores analógicos **exclusivamente a los canales del ADC1** (en los GPIOs 36, 39, 34, 35 y 32). Esto es fundamental: el bloque ADC2 del ESP32 comparte circuitos con la radio Wi-Fi y Bluetooth; al transmitir por BLE, ADC2 queda inhabilitado por hardware. Conectar a ADC1 garantiza que no exista conflicto ni pérdida de lectura."*
-  > - *Segundo, una **Unidad de Medición Inercial (IMU) MPU-6050** de 6 grados de libertad montada en el dorso de la mano. Se comunica por el bus **I²C a 400 kHz** usando los pines GPIO 21 (SDA) y GPIO 22 (SCL), capturando la aceleración tridimensional y la velocidad angular para distinguir la orientación espacial de la mano y diferenciar señas estáticas de gestos dinámicos."*
-
-- **LEONELD SOTELO:**
-  > *"Todo el conjunto se alimenta a 3.3 y 5 voltios de forma segura y portable mediante una batería recargable con módulo TP4056 o directamente a través de una conexión micro-USB, garantizando un peso inferior a 120 gramos y máxima ergonomía para el usuario."*
+> *"Buenas tardes, profesor Gustavo Paz. Mi nombre es Johana Quispe, estudiante de Ingeniería de Sistemas Computacionales en la Universidad Privada del Norte. En representación de mi grupo, presento nuestro proyecto final del curso de Arquitectura del Computador: **KLAPS**, un sistema inteligente de comunicación asistida mediante guantes instrumentados.*
+> 
+> *En el Perú existen más de 500,000 personas con discapacidad auditiva y del habla, pero muy pocos oyentes conocen la lengua de señas. Para resolver esta brecha creamos KLAPS, un dispositivo portable y accesible que captura los movimientos de la mano y los traduce en tiempo real a texto y audio en cualquier celular mediante la Web Bluetooth API, sin necesidad de instalar ninguna aplicación."*
 
 ---
 
-### BLOQUE 3 · ARQUITECTURA LÓGICA, PROTOCOLO BLE Y CLASIFICADOR KNN (03:00 – 04:45)
+### 2. COMPONENTES DE HARDWARE (00:45 – 01:45 · 60 segundos)
+*(Cámara con plano cercano al guante físico. Señalas los componentes mientras los describes).*
 
-**[ESCENA: Split-Screen o inserción de diagrama de bloques en pantalla mostrando el flujo desde el ESP32 hasta el navegador web en Vercel].**
-
-- **JOHANA QUISPE:**
-  > *"A diferencia de investigaciones previas que intentan ejecutar redes neuronales pesadas dentro del microcontrolador provocando sobrecalentamiento y alto consumo de batería, en KLAPS implementamos una **arquitectura híbrida desacoplada**:*
-  > 
-  > 1. *El firmware del ESP32 muestrea a **20 Hz** (cada 50 milisegundos) y empaqueta las lecturas crudas en una estructura binaria contigua **Little-Endian de exactamente 34 bytes** (10 bytes para flexión de dedos y 24 bytes para acelerómetro y giroscopio).*
-  > 2. *Esta trama se notifica a través de un perfil **BLE GATT personalizado** (servicio `6e400001` y característica `6e400002`), logrando un caudal ultraligero de apenas 680 bytes por segundo y consumiendo menos de 20 miliamperios."*
-
-- **JOSELYN TANANTA:**
-  > *"La inteligencia de reconocimiento reside directamente en el cliente dentro de nuestra Progressive Web App desarrollada en React y Vite, desplegada globalmente en Vercel bajo HTTPS para habilitar la **Web Bluetooth API**.*
-  > 
-  > *El clasificador utiliza el algoritmo **K-Nearest Neighbors (KNN)** en JavaScript puro sobre un vector normalizado de 22 dimensiones:*
-  > - *Aplica pesos diferenciados dando prioridad a la flexión anatómica y a la orientación inercial.*
-  > - *Cuenta con una ventana temporal de estabilidad de 600 milisegundos para evitar falsos positivos durante la transición natural de la mano.*
-  > - *Integra un motor de **cinemática asistida** que modela armónicamente la sinergia muscular de los dedos y una rutina de **calibración guiada rápida** que normaliza las lecturas analógicas a la anatomía de cada usuario en solo 3 segundos sin necesidad de reprogramar el microcontrolador."*
+> *"En cuanto a la arquitectura física del hardware, el sistema cuenta con tres componentes fundamentales:*
+> 
+> *1. El microcontrolador **ESP32 DevKit V1**, con arquitectura Xtensa Dual-Core de 32 bits a 240 MHz. Aprovechamos su doble núcleo para desacoplar tareas: el Core 0 se encarga de la radiofrecuencia Bluetooth Low Energy, mientras que el Core 1 gestiona el muestreo de los sensores.*
+> 
+> *2. Cinco **sensores de flexión resistivos de 2.2 pulgadas** acoplados en divisores de tensión de 10 kΩ. Un criterio arquitectural indispensable fue conectar todos los sensores analógicos exclusivamente a los canales del conversor **ADC1** (en los pines 36, 39, 34, 35 y 32), ya que el ADC2 se deshabilita por hardware cuando se activa la radio Bluetooth.*
+> 
+> *3. Una unidad inercial **MPU-6050 de 6 grados de libertad** en el dorso de la mano, conectada por bus **I²C a 400 kHz** en los pines 21 y 22, permitiendo leer aceleración y velocidad angular para reconocer la orientación de la mano."*
 
 ---
 
-### BLOQUE 4 · DEMOSTRACIÓN PRÁCTICA EN VIVO (04:45 – 07:15)
+### 3. FUNCIONAMIENTO Y ARQUITECTURA LÓGICA (01:45 – 02:45 · 60 segundos)
+*(Muestras la pantalla del celular con la app o el esquema general).*
 
-**[ESCENA: Pantalla dividida (Split-Screen). A la izquierda, Johana se coloca el guante físico. A la derecha, captura en tiempo real de la pantalla del celular Android navegando en `https://klaps-ebon.vercel.app/traduccion`].**
-
-- **JOHANA QUISPE:**
-  > *"Vamos a realizar la demostración práctica en vivo conectando el guante directamente a un teléfono móvil Android mediante Google Chrome utilizando la URL de producción desplegada en Vercel."*
-
-1. **Paso 1: Enlace Web Bluetooth en vivo:**
-   - *Acción en celular:* Tocar el botón **«Conectar Guante»** o icono de Bluetooth en la pantalla.
-   - *Narración:* *"El navegador solicita acceso a dispositivos BLE cercanos mediante la ventana emergente nativa. Seleccionamos `KLAPS_Guante_D` y pulsamos Vincular."*
-   - *Resultado visible:* El badge cambia inmediatamente a verde **«Conectado»** y el monitor de telemetría empieza a recibir la trama a 20 Hz.
-
-2. **Paso 2: Calibración Rápida de la Mano:**
-   - *Acción:* Pulsar el botón **«Calibrar»** en la interfaz.
-   - *Narración:* *"El sistema realiza la calibración guiada en dos pasos: primero extendemos la mano plana en reposo durante 3 segundos para capturar el valor mínimo, y luego cerramos el puño para registrar la máxima flexión. De inmediato, los rangos quedan normalizados al cien por ciento."*
-
-3. **Paso 3: Traducción de Señas Estáticas (Vocales):**
-   - *Acción:* Ejecutar con la mano las señas frente a la cámara:
-     - **Seña "A"** (puño cerrado con pulgar al lado): La app detecta "A", muestra la tarjeta con confianza > 90% y el celular pronuncia la letra en voz alta: *"A"*.
-     - **Seña "E"** (dedos recogidos apoyados sobre el pulgar): La app detecta "E" y la sintetiza por audio: *"E"*.
-     - **Seña "I"** (meñique extendido, resto cerrado): La app detecta "I" instantáneamente: *"I"*.
-     - **Seña "O"** (forma circular de la mano): La app traduce "O".
-     - **Seña "U"** (índice y medio juntos levantados): La app traduce "U".
-   - *Narración:* *"Como se observa, los indicadores de flexión responden con suavidad en tiempo real. La síntesis de voz Web Speech API verbaliza la seña sin ningún retardo perceptible, con una latencia de clasificación inferior a 50 milisegundos."*
-
-4. **Paso 4: Demostración del Canal de Auxilio (SOS):**
-   - *Acción:* Agitar la mano con un patrón de emergencia o seleccionar la seña de auxilio.
-   - *Narración:* *"KLAPS incorpora un canal de auxilio SOS para situaciones de riesgo. Al detectar la seña de socorro o agitación inercial sostenida, se inicia una cuenta regresiva de seguridad de 10 segundos para evitar falsas alarmas. Si el usuario no la cancela, una Edge Function serverless despacha de forma segura una alerta a Telegram con las coordenadas satelitales GPS exactas del usuario hacia sus contactos de emergencia."*
+> *"Para maximizar la autonomía y la velocidad, diseñamos una arquitectura distribuida:*
+> 
+> *El microcontrolador no ejecuta redes neuronales pesadas. Su función es muestrear a **20 Hz** y empaquetar los datos crudos en una trama binaria compacta Little-Endian de exactamente **34 bytes**: 10 bytes para la flexión de los dedos y 24 bytes para aceleración y giroscopio. Esta trama se transmite por Bluetooth Low Energy bajo un perfil GATT personalizado, consumiendo menos de 20 miliamperios.*
+> 
+> *La inferencia se delega completamente al navegador cliente dentro de una Progressive Web App desarrollada en React y desplegada en Vercel bajo HTTPS. La app recibe la trama por Web Bluetooth y ejecuta un clasificador **KNN en JavaScript** que compara las lecturas con vectores canónicos ponderados y una ventana de estabilidad de 600 milisegundos, incorporando cinemática asistida para una respuesta natural de la mano."*
 
 ---
 
-### BLOQUE 5 · MÉTRICAS, CONCLUSIONES Y CIERRE (07:15 – 08:30)
+### 4. DEMOSTRACIÓN EN VIVO (02:45 – 04:30 · 1 minuto 45 segundos)
+*(Te colocas el guante en la mano. Tu celular está al lado mostrando `https://klaps-ebon.vercel.app/traduccion`. En esta sección hablas poco; las acciones y el audio del celular llenan el tiempo).*
 
-**[ESCENA: Cámara al equipo completo con el guante y la pantalla de métricas o cartel de KLAPS de fondo].**
+1. **Enlace Bluetooth (02:45 – 03:10):**
+   - Dices: *"Ahora procedo con la demostración en vivo conectando el guante directamente a mi celular."*
+   - Tocas **«Conectar Guante»** en el celular. Se abre el selector nativo de Chrome.
+   - Dices: *"Selecciono `KLAPS_Guante_D` y pulso Vincular."*
+   - Muestras la pantalla del teléfono: el indicador cambia a verde **«Conectado»** y las barras de los 5 dedos reaccionan en vivo.
 
-- **JOSELYN TANANTA:**
-  > *"En la fase experimental medimos una **latencia global de extremo a extremo de 34.3 milisegundos** (compuesta por 4.8 ms de adquisición analógica e I2C, 1.2 ms de estructuración de trama, 14.5 ms de transmisión BLE, 1.8 ms de clasificación KNN en el navegador y 12 ms de renderizado visual y síntesis de voz). Esto se encuentra muy por debajo del umbral de percepción humana de 100 milisegundos, permitiendo una conversación continua y natural."*
+2. **Calibración Rápida (03:10 – 03:30):**
+   - Dices: *"Ejecuto la calibración rápida de 3 segundos."*
+   - Tocas **«Calibrar»**. Mantienes la mano abierta y relajada durante el conteo regresivo de 3 segundos, y luego cierras el puño.
+   - Dices: *"Listo, los sensores quedan normalizados a mi mano."*
 
-- **LEONELD SOTELO:**
-  > *"La exactitud global del clasificador superó el **94%** tras la calibración guiada, validando que el empaquetado binario de 34 bytes a 20 Hz es notablemente superior a arquitecturas convencionales basadas en JSON o Bluetooth clásico SPP."*
+3. **Traducción de Señas / Vocales (03:30 – 04:05):**
+   *(Ejecutas cada seña de forma pausada manteniéndola 2 o 3 segundos para que el celular hable en voz alta)*:
+   - **Seña 'A'** (puño cerrado con pulgar al lado): La pantalla detecta 'A'. El celular pronuncia: *"A"*.
+     Dices: *"Reconoce la letra A y la sintetiza por voz."*
+   - **Seña 'E'** (dedos doblados sobre el pulgar): La pantalla marca 'E'. El celular pronuncia: *"E"*.
+   - **Seña 'I'** (meñique levantado, resto cerrado): La pantalla marca 'I'. El celular pronuncia: *"I"*.
+   - **Seña 'O'** (mano en círculo): La pantalla marca 'O'. El celular pronuncia: *"O"*.
+   - **Seña 'U'** (índice y medio juntos levantados): La pantalla marca 'U'. El celular pronuncia: *"U"*.
+   - Dices: *"Como se observa, los 5 dedos responden con total fluidez y la síntesis de voz se produce en tiempo real."*
 
-- **CAMILA MONTALVO:**
-  > *"Como conclusión fundamental de Arquitectura del Computador, este proyecto demuestra que diseñar sistemas embebidos eficientes requiere respetar las restricciones del silicio —como aislar el ADC1 frente a la radiofrecuencia— y aprovechar las capacidades computacionales del dispositivo cliente para democratizar la tecnología asistiva."*
-
-- **JOHANA QUISPE:**
-  > *"Agradecemos al docente Mg. Gustavo Paz Purizaca por la guía durante este ciclo académico 2026-2. Esto es KLAPS: tecnología, arquitectura e inclusión al alcance de todos. ¡Muchas gracias!"*
-
-**[FIN DEL VIDEO · Créditos finales con código de estudiantes, universidad y repositorio GitHub].**
+4. **Canal de Auxilio SOS (04:05 – 04:30):**
+   - Agitas la mano con energía o activas la alerta en la pantalla.
+   - Dices: *"KLAPS cuenta además con un canal de auxilio SOS. Al detectar un patrón de emergencia, inicia una cuenta atrás de seguridad de 10 segundos para despachar las coordenadas GPS exactas a un contacto por Telegram."*
+   - Tocas la pantalla para cancelar la cuenta atrás y mostrar el control de seguridad.
 
 ---
 
-## 4. Guía de Conexión desde el Teléfono Celular (Android)
+### 5. MÉTRICAS DE RENDIMIENTO Y CIERRE (04:30 – 05:05 · 35 segundos)
+*(Cámara enfocándote a ti con el guante en mano).*
 
-Para que la demostración con el celular funcione perfectamente durante la grabación, sigue estos pasos:
+> *"En las pruebas experimentales logramos una latencia total de extremo a extremo de solo **34.3 milisegundos**, muy por debajo de los 100 milisegundos necesarios para una conversación fluida, y una exactitud superior al **94%**.*
+> 
+> *KLAPS demuestra que combinando hardware accesible como el ESP32, comunicación BLE eficiente y computación en el cliente web, podemos democratizar la inclusión de la comunidad sorda.*
+> 
+> *Agradezco al profesor Gustavo Paz por sus enseñanzas durante este ciclo. Muchas gracias."*
 
-1. **Abrir Chrome en Android y entrar a la URL HTTPS:**
-   - Dirección: **`https://klaps-ebon.vercel.app`**
-   - *Nota:* Web Bluetooth exige conexión segura obligatoria (`HTTPS`). Vercel ya provee el certificado SSL activo.
-
-2. **Permisos requeridos en Android:**
-   - Asegúrate de tener el **Bluetooth encendido** en el teléfono.
-   - En Android 12 o superior, Chrome solicitará permiso de **"Dispositivos cercanos"**. Pulsa **«Permitir»**.
-   - Asegúrate de tener la **Ubicación (GPS) activada** (en Android el escaneo de balizas BLE requiere permiso de ubicación del sistema operativo).
-
-3. **Vincular el Guante:**
-   - Entra a la sección **Traducción** (`/traduccion`) o **Dispositivos** (`/dispositivos`).
-   - Toca el botón de **Bluetooth / Conectar**.
-   - En la lista emergente aparecerá **`KLAPS_Guante_D`** (o `KLAPS_Guante_I`).
-   - Selecciónalo y toca **«Vincular»**.
-   - El indicador pasará a estado verde y comenzará la lectura en vivo.
+*(FIN DEL VIDEO · Duración exacta: ~5 minutos y 05 segundos).*
