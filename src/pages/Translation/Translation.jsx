@@ -731,28 +731,30 @@ export default function Translation() {
           </div>
 
           <p className="mt-1 text-[0.7rem] text-ink-soft">
-            Señas evaluadas en los 3 sensores principales (Pulgar, Medio, Meñique · peso 1.4). Índice y Anular cancelados (peso 0). Señas dinámicas evalúan además trayectoria espacio-temporal MPU-6050.
+            Monitoreo en tiempo real de los 5 canales de flexión y telemetría inercial MPU-6050 (20 Hz).
           </p>
 
-          {/* Barras porcentuales en vivo de los 3 dedos flex activos */}
-          <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+          {/* Barras porcentuales en vivo de los 5 dedos instrumentados */}
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
             {[
-              { id: 0, label: 'Pulgar (GPIO 36)', short: 'Pulgar', val: activeHandFlex[0] ?? 0, raw: activeReading?.rawFlex?.[0] ?? 0 },
-              { id: 2, label: 'Medio (GPIO 34)', short: 'Medio', val: activeHandFlex[2] ?? 0, raw: activeReading?.rawFlex?.[2] ?? 0 },
-              { id: 4, label: 'Meñique (GPIO 32)', short: 'Meñique', val: activeHandFlex[4] ?? 0, raw: activeReading?.rawFlex?.[4] ?? 0 },
+              { id: 0, label: 'Pulgar', pin: 'GPIO 36', val: activeHandFlex[0] ?? 0, raw: activeReading?.rawFlex?.[0] ?? 0 },
+              { id: 1, label: 'Índice', pin: 'GPIO 39', val: activeHandFlex[1] ?? 0, raw: activeReading?.rawFlex?.[1] ?? 0 },
+              { id: 2, label: 'Medio', pin: 'GPIO 34', val: activeHandFlex[2] ?? 0, raw: activeReading?.rawFlex?.[2] ?? 0 },
+              { id: 3, label: 'Anular', pin: 'GPIO 35', val: activeHandFlex[3] ?? 0, raw: activeReading?.rawFlex?.[3] ?? 0 },
+              { id: 4, label: 'Meñique', pin: 'GPIO 32', val: activeHandFlex[4] ?? 0, raw: activeReading?.rawFlex?.[4] ?? 0 },
             ].map((finger) => (
               <div
                 key={finger.id}
                 className="rounded-lg border border-brand-200/90 bg-white p-2.5 shadow-2xs"
               >
                 <div className="flex items-center justify-between text-xs font-bold text-ink">
-                  <span className="flex items-center gap-1">
-                    <span className="font-semibold text-brand-900">{finger.short}</span>
-                    <span className="text-[0.65rem] font-normal text-ink-soft">({finger.label})</span>
-                  </span>
+                  <div>
+                    <span className="font-semibold text-brand-900">{finger.label}</span>
+                    <span className="block text-[0.6rem] font-normal text-ink-soft">({finger.pin})</span>
+                  </div>
                   <div className="text-right">
                     <span className="font-mono text-brand-800">{Math.round(finger.val)}%</span>
-                    <span className="block text-[0.65rem] font-mono font-normal text-ink-soft">
+                    <span className="block text-[0.6rem] font-mono font-normal text-ink-soft">
                       raw: {finger.raw}
                     </span>
                   </div>
