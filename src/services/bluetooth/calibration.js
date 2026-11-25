@@ -48,11 +48,11 @@ export const FINGER_NAMES = [
  * Calibración predeterminada compatible con el firmware oficial KLAPS (0-100%):
  * - Dedo recto (mano abierta)  -> 0 % de flexión.
  * - Dedo doblado (puño cerrado) -> 100 % de flexión.
- * - Anular desconectado        -> 0 % fijo (ignorado con peso 0).
+ * - Índice y Anular cancelados -> 0 % fijo (ignorados con peso 0).
  */
 export const DEFAULT_OPEN_RAW = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-export const DEFAULT_CLOSED_RAW = [100, 100, 100, 0, 100, 100, 100, 100, 0, 100]
-export const DEFAULT_VALID = [true, true, true, false, true, true, true, true, false, true]
+export const DEFAULT_CLOSED_RAW = [100, 0, 100, 0, 100, 100, 0, 100, 0, 100]
+export const DEFAULT_VALID = [true, false, true, false, true, true, false, true, false, true]
 
 export const DEFAULT_CALIBRATION = {
   version: 1,
@@ -309,8 +309,8 @@ export function buildCalibration({ stretched = [], closed = [], neutral = [] } =
   })
 
   const valid = safeOpen.map((_, index) => {
-    // El anular (índice 3 en derecho, 8 en izquierdo) está desconectado físicamente
-    if (index % 5 === 3) return false
+    // Índice (1, 6) y Anular (3, 8) cancelados con peso 0
+    if (index % 5 === 1 || index % 5 === 3) return false
     return true
   })
 
@@ -354,16 +354,21 @@ export function describeCalibration(calibration) {
       const closed = Math.round(safeCal.flex.closedRaw[position])
       const span = Math.abs(open - closed)
       const valid =
-        index !== 3 && (open > 0 || closed > 0) && span >= MIN_FLEX_SPAN
+        index !== 1 && index !== 3 && (open > 0 || closed > 0) && span >= MIN_FLEX_SPAN
 
       let status = 'activo'
       let statusText = `Abierto ${open} → Cerrado ${closed} (Δ${span} · peso 1.4)`
       if (!valid) {
-        status = open === 0 && closed === 0 ? 'desconectado / 0V' : 'rango insuficiente (< 3 %)'
-        statusText =
-          open === 0 && closed === 0
-            ? 'raw 0 · peso 0 (desconectado / ignorado)'
-            : `Abierto ${open} → Cerrado ${closed} (inactivo · peso 0)`
+        if (index === 1) {
+          status = 'cancelado / peso 0'
+          statusText = 'cancelado por usuario (peso 0 · ignorado)'
+        } else if (index === 3 || (open === 0 && closed === 0)) {
+          status = 'desconectado / 0V'
+          statusText = 'raw 0 · peso 0 (desconectado / ignorado)'
+        } else {
+          status = 'rango insuficiente (< 3 %)'
+          statusText = `Abierto ${open} → Cerrado ${closed} (inactivo · peso 0)`
+        }
       }
 
       const fingerName = FINGER_NAMES[index] || `Dedo ${index}`
@@ -395,7 +400,7 @@ export function describeCalibration(calibration) {
     ready: true,
     summary:
       validCount > 0
-        ? `${validCount} sensores flex activos (peso 1.4) · Anular ignorado (peso 0)`
+        ? `${validCount} sensores flex activos (Pulgar, Medio, Meñique · peso 1.4) · Índice y Anular cancelados (peso 0)`
         : 'Calibración activa basada en MPU6050 (pitch/roll)',
     derecho: derechoRanges,
     izquierdo: izquierdoRanges,

@@ -135,8 +135,8 @@ export function applyCalibration(reading, calibration, side = 'derecho') {
   const base = side === 'izquierdo' ? 5 : 0
 
   const flex = rawList.map((rawVal, index) => {
-    // Si es el dedo anular (GPIO 35 desconectado) o pin en 0 / no numérico: siempre 0
-    if (index === 3 || rawVal === 0 || !Number.isFinite(rawVal)) return 0
+    // Si es índice (GPIO 39 cancelado) o anular (GPIO 35 desconectado) o pin en 0: siempre 0 (peso 0)
+    if (index === 1 || index === 3 || rawVal === 0 || !Number.isFinite(rawVal)) return 0
 
     const position = base + index
     const openRaw = activeCal?.flex?.openRaw?.[position] ?? DEFAULT_OPEN_RAW[position]
@@ -247,8 +247,9 @@ export function isRestHand(reading) {
   if (!reading?.flex || !reading?.imu) return false
 
   const allFingers = reading.flex.slice(0, 5)
-  // Dedos activos que registran señal por encima del umbral de desconexión (> 5 %) y raw !== 0
+  // Dedos activos (pulgar 0, medio 2, meñique 4): se omiten índice (1) y anular (3) que están cancelados
   const activeFingers = allFingers.filter((val, idx) => {
+    if (idx === 1 || idx === 3) return false
     const raw = reading.rawFlex?.[idx]
     if (raw === 0) return false
     return Number.isFinite(val) && val > 5
