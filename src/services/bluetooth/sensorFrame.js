@@ -46,50 +46,33 @@ const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 export function calculateFlexPercentage(raw, openRaw, closedRaw) {
   if (!Number.isFinite(raw) || raw === 0) return 0
 
-  // 1. Si raw viene en porcentaje directo (<= 100) pero la calibración guardada es de ADC (> 150):
-  //    Significa que la placa ESP32 ya convirtió el ADC en porcentaje 0-100%
-  if (raw <= 100 && Math.max(openRaw ?? 0, closedRaw ?? 0) > 150) {
-    const linear = clamp(raw / 100, 0, 1)
-    const contrasted = linear * linear * (3 - 2 * linear)
-    return contrasted * 100
-  }
-
-  // 2. Si raw es una lectura ADC analógica directa (> 150):
-  if (raw > 150) {
-    // Si openRaw y closedRaw son por defecto (0 y 100) o no están en rango ADC,
-    // usamos la referencia física del hardware KLAPS medida en laboratorio (Abierto ~980, Cerrado ~850)
-    const effOpen = openRaw && openRaw > 150 ? openRaw : 980
-    const effClosed = closedRaw && closedRaw > 150 ? closedRaw : 850
-    const span = Math.abs(effOpen - effClosed)
-    if (span < 12) return 0
-
-    let linear
-    if (effOpen > effClosed) {
-      // Invertido (la tensión/ADC disminuye al doblar el dedo)
-      linear = clamp((effOpen - raw) / (effOpen - effClosed), 0, 1)
-    } else {
-      // Directo (la tensión/ADC aumenta al doblar el dedo)
-      linear = clamp((raw - effOpen) / (effClosed - effOpen), 0, 1)
+  // 1. Si raw viene en porcentaje directo (<= 100):
+  // El firmware ESP32 de KLAPS ya entrega el valor escalado (0% abierto, 100% cerrado).
+  // Es inmune a calibraciones guardadas corruptas o invertidas:
+  if (raw <= 100) {
+    const o = openRaw ?? 0
+    const c = closedRaw ?? 100
+    // Solo si hay una calibración directa válida con rango razonable (cerrado > abierto):
+    if (c > o && (c - o) >= 20 && c <= 100) {
+      const linear = clamp((raw - o) / (c - o), 0, 1)
+      return linear * linear * (3 - 2 * linear) * 100
     }
-
-    const contrasted = linear * linear * (3 - 2 * linear)
-    return contrasted * 100
-  }
-
-  // 3. Si raw está en rango de porcentaje directo (<= 100):
-  const o = openRaw ?? 0
-  const c = closedRaw ?? 100
-  const span = Math.abs(o - c)
-  if (span < 12) {
+    // Si no, o si la calibración estaba invertida/inconsistente: usar el porcentaje del firmware
     const linear = clamp(raw / 100, 0, 1)
     return linear * linear * (3 - 2 * linear) * 100
   }
 
+  // 2. Si raw es una lectura ADC analógica directa (> 150):
+  const effOpen = openRaw && openRaw > 150 ? openRaw : 980
+  const effClosed = closedRaw && closedRaw > 150 ? closedRaw : 850
+  const span = Math.abs(effOpen - effClosed)
+  if (span < 12) return 0
+
   let linear
-  if (o > c) {
-    linear = clamp((o - raw) / (o - c), 0, 1)
+  if (effOpen > effClosed) {
+    linear = clamp((effOpen - raw) / (effOpen - effClosed), 0, 1)
   } else {
-    linear = clamp((raw - o) / (c - o), 0, 1)
+    linear = clamp((raw - effOpen) / (effClosed - effOpen), 0, 1)
   }
 
   const contrasted = linear * linear * (3 - 2 * linear)
@@ -158,7 +141,13 @@ export function applyCalibration(reading, calibration, side = 'derecho') {
 
     const openRaw = activeCal?.flex?.openRaw?.[position] ?? DEFAULT_OPEN_RAW[position]
     const closedRaw = activeCal?.flex?.closedRaw?.[position] ?? DEFAULT_CLOSED_RAW[position]
-    const isValid = activeCal?.flex?.valid?.[position] ?? DEFAULT_VALID[position]
+    let isValid = activeCal?.flex?.valid?.[position] ?? DEFAULT_VALID[position]
+
+    // Auto-sanación: si el sensor está enviando datos reales (> 15), es un sensor activo
+    // y no debe ser silenciado por un registro histórico corrupto en localStorage
+    if (!isValid && rawVal > 15) {
+      isValid = true
+    }
 
     if (!isValid) return 0
 

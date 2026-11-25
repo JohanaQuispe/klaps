@@ -93,6 +93,7 @@ export default function Translation() {
     gloves,
     calibration,
     applyCalibrationSettings,
+    removeCalibration,
   } = useDevices()
 
   const readingsRef = useRef(readings)
@@ -587,10 +588,11 @@ export default function Translation() {
             onClick={() => {
               const reset = resetToCanonicalSigns()
               setTraining(reset)
+              removeCalibration?.()
             }}
-            title="Elimina señas no usadas o de prueba y restaura las señas maestras oficiales"
+            title="Restaura las señas maestras oficiales y reinicia la calibración limpia"
           >
-            Restablecer señas maestras
+            Restablecer señas y calibración
           </Button>
         </div>
 
