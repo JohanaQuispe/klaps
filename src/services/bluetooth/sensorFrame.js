@@ -135,21 +135,12 @@ export function applyCalibration(reading, calibration, side = 'derecho') {
   const base = side === 'izquierdo' ? 5 : 0
 
   const flex = rawList.map((rawVal, index) => {
-    const position = base + index
-    // Ignorar si raw === 0 (ej. Anular desconectado)
-    if (rawVal === 0) return 0
+    // Si es el dedo anular (GPIO 35 desconectado) o pin en 0 / no numérico: siempre 0
+    if (index === 3 || rawVal === 0 || !Number.isFinite(rawVal)) return 0
 
+    const position = base + index
     const openRaw = activeCal?.flex?.openRaw?.[position] ?? DEFAULT_OPEN_RAW[position]
     const closedRaw = activeCal?.flex?.closedRaw?.[position] ?? DEFAULT_CLOSED_RAW[position]
-    let isValid = activeCal?.flex?.valid?.[position] ?? DEFAULT_VALID[position]
-
-    // Auto-sanación: si el sensor está enviando datos reales (> 15), es un sensor activo
-    // y no debe ser silenciado por un registro histórico corrupto en localStorage
-    if (!isValid && rawVal > 15) {
-      isValid = true
-    }
-
-    if (!isValid) return 0
 
     return calculateFlexPercentage(rawVal, openRaw, closedRaw)
   })

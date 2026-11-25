@@ -87,7 +87,7 @@ const char* FLEX_NAMES[5] = { "Pulgar", "Índice", "Medio", "Anular", "Meñique"
 // Mano abierta (dedos rectos):  Pulgar 958, Índice 1012, Medio 969, Anular 0, Meñique 786
 // Puño cerrado (dedos doblados): Pulgar 848, Índice  950, Medio 858, Anular 0, Meñique 711
 const int ADC_STRAIGHT[5] = { 960, 1014, 970, 0, 788 }; // Dedo recto (0 %)
-const int ADC_BENT[5]     = { 846,  948, 856, 0, 708 }; // Dedo doblado (100 %)
+const int ADC_BENT[5]     = { 846,  952, 856, 0, 708 }; // Dedo doblado (100 %)
 
 // Umbral mínimo de tensión para detectar si el sensor está físicamente conectado
 const int ADC_DISCONNECTED_THRESHOLD = 25; // Si marca <= 25 cuentas, pin a GND o roto

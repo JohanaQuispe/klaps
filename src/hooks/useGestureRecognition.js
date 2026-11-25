@@ -147,8 +147,8 @@ export function useGestureRecognition({
         hasRequiredHands(sample.handMode, hands),
       )
 
-      // Máscara de canales flex activos para asignarles peso 0 a los muertos/saturados
-      const activeMask = calibrationRef.current?.flex?.valid ?? null
+      // Máscara de canales flex activos: los 4 dedos activos (pulgar, índice, medio, meñique) tienen peso completo; solo el 3 (anular) tiene peso 0
+      const activeMask = [true, true, true, false, true, true, true, true, false, true]
 
       // ── 0. Reposo: puños cerrados hacia abajo ─────────────────────────
       const enterRest = (reason) => {
