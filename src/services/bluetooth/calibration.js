@@ -180,7 +180,24 @@ export function loadCalibration() {
   try {
     const raw = window.localStorage.getItem(CALIBRATION_KEY)
     if (!raw) return DEFAULT_CALIBRATION
-    return normalizeCalibration(JSON.parse(raw)) ?? DEFAULT_CALIBRATION
+    const parsed = JSON.parse(raw)
+
+    // Sanitización y auto-limpieza: Si en localStorage el índice está guardado como inválido
+    // o con calibración invertida en escala porcentual (open >= closed), limpiar y reiniciar a valores por defecto
+    const isCorrupted =
+      parsed?.flex?.valid?.[1] === false ||
+      (parsed?.flex?.openRaw?.[1] != null &&
+        parsed?.flex?.closedRaw?.[1] != null &&
+        parsed.flex.openRaw[1] <= 100 &&
+        parsed.flex.closedRaw[1] <= 100 &&
+        parsed.flex.openRaw[1] >= parsed.flex.closedRaw[1])
+
+    if (isCorrupted) {
+      window.localStorage.removeItem(CALIBRATION_KEY)
+      return DEFAULT_CALIBRATION
+    }
+
+    return normalizeCalibration(parsed) ?? DEFAULT_CALIBRATION
   } catch {
     return DEFAULT_CALIBRATION
   }
