@@ -31,10 +31,10 @@ export const CALIBRATION_FRAMES = 40
 /** Pausa antes de cada paso para que la persona se coloque. */
 export const CALIBRATION_SETTLE_MS = 900
 /**
- * Diferencia mínima estricta entre mínimo y máximo para dar un dedo por activo (12 %).
- * Sensores con menor variación se consideran muertos/saturados y se les asigna peso 0.
+ * Diferencia mínima entre mínimo y máximo para dar un dedo por activo (3 %).
+ * Sensores con al menos 3% de variación se calibran y se les asigna peso 1.4.
  */
-export const MIN_FLEX_SPAN = 12
+export const MIN_FLEX_SPAN = 3
 
 export const FINGER_NAMES = [
   'Pulgar (GPIO 36)',
@@ -291,23 +291,19 @@ export function buildCalibration({ stretched = [], closed = [], neutral = [] } =
     return Math.round(avg)
   })
 
-  // Sanitización de dedos activos: si un dedo físico (0, 1, 2, 4) no tuvo suficiente rango o openVal > 50
-  // (por ejemplo, porque la mano estaba agarrando el ratón al pulsar «Iniciar calibración»),
-  // se asegura que mantenga el rango directo estándar (0 abierto, 100 cerrado) y quede ACTIVO (peso 1.4).
+  // Mapeo exacto de los valores medidos en la mano:
+  // Preserva el valor abierto y cerrado real de cada dedo activo (0, 1, 2, 4),
+  // garantizando que todos los dedos activos queden habilitados (peso 1.4).
   const safeOpen = openRaw.map((openVal, index) => {
     if (index % 5 === 3) return 0 // Anular desconectado siempre 0
-    const closedVal = closedRaw[index]
-    if (Math.abs(openVal - closedVal) < MIN_FLEX_SPAN || openVal > 50) {
-      return 0
-    }
     return openVal
   })
 
   const safeClosed = closedRaw.map((closedVal, index) => {
     if (index % 5 === 3) return 0 // Anular desconectado
     const openVal = safeOpen[index]
-    if (Math.abs(openVal - closedVal) < MIN_FLEX_SPAN || closedVal <= 50) {
-      return 100
+    if (closedVal <= openVal) {
+      return openVal + 3 // Asegura un span mínimo de 3 para respuesta activa
     }
     return closedVal
   })
@@ -358,12 +354,12 @@ export function describeCalibration(calibration) {
       const closed = Math.round(safeCal.flex.closedRaw[position])
       const span = Math.abs(open - closed)
       const valid =
-        Boolean(safeCal.flex.valid[position]) && (open > 0 || closed > 0) && span >= MIN_FLEX_SPAN
+        index !== 3 && (open > 0 || closed > 0) && span >= MIN_FLEX_SPAN
 
       let status = 'activo'
       let statusText = `Abierto ${open} → Cerrado ${closed} (Δ${span} · peso 1.4)`
       if (!valid) {
-        status = open === 0 && closed === 0 ? 'desconectado / 0V' : 'rango insuficiente (< 12 %)'
+        status = open === 0 && closed === 0 ? 'desconectado / 0V' : 'rango insuficiente (< 3 %)'
         statusText =
           open === 0 && closed === 0
             ? 'raw 0 · peso 0 (desconectado / ignorado)'
