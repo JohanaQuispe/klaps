@@ -52,8 +52,8 @@ export function calculateFlexPercentage(raw, openRaw, closedRaw) {
   if (raw <= 100) {
     const o = openRaw ?? 0
     const c = closedRaw ?? 100
-    // Solo si hay una calibración directa válida con rango razonable (cerrado > abierto):
-    if (c > o && (c - o) >= 20 && c <= 100) {
+    // Si hay una calibración personalizada (cerrado > abierto con al menos 3% de variación):
+    if (c > o && (c - o) >= 3 && c <= 100) {
       const linear = clamp((raw - o) / (c - o), 0, 1)
       return linear * linear * (3 - 2 * linear) * 100
     }
